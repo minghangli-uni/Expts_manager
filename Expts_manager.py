@@ -60,7 +60,7 @@ class Expts_manager(object):
         else:
             base_branch = repo.branches[BRANCH_NAME_BASE]
         base_branch.checkout()
-        print(f"Check out the base branch: {BRANCH_NAME_BASE}")
+        print(f"Checkout the base branch: {BRANCH_NAME_BASE}")
         template_config_data = self._read_ryaml(os.path.join(self.template_path,'config.yaml'))
         tmp_template_config_data = copy.deepcopy(template_config_data) # before changed
         template_config_data['metadata']['enable'] = True
@@ -69,7 +69,7 @@ class Expts_manager(object):
             # stage the change
             repo.index.add(os.path.join(self.template_path,'config.yaml'))
             # commmit the change
-            commit_message = 'Enable metadata to be true for perturbation tests.'
+            commit_message = 'base: Enable metadata to be true for perturbation tests.'
             repo.index.commit(commit_message)
             print(f"Committed changes with message: '{commit_message}'")
         else:
@@ -109,6 +109,7 @@ class Expts_manager(object):
 
     def manage_expts(self):
         for i in range(len(self.param_dict_change_list)):
+            # for each experiment
             expt_name = '_'.join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()]) 
             rel_path  = '_'.join([EXPT_REL_PATH,expt_name])
             expt_path = os.path.join(self.dir_manager,rel_path)
@@ -120,6 +121,7 @@ class Expts_manager(object):
                 print(f'clone template - payu clone!','\n')
                 # payu clone -B master -b ctrl test/1deg_jra55_ryf test/1deg_jra55_ryf_test
                 command = f'payu clone -B {BRANCH_NAME_BASE} -b {BRANCH_PERTURB} {self.template_path} {expt_path}'
+                # automatically leave a commit with expt uuid
                 test = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
     
                 # apply changes and write them to `MOM_override`
