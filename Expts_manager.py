@@ -70,7 +70,7 @@ class Expts_manager(object):
             # stage the change
             repo.index.add(os.path.join(self.template_path,'config.yaml'))
             # commmit the change
-            commit_message = 'Enable metadata to be true for perturbation tests.'
+            commit_message = 'base: Enable metadata to be true for perturbation tests.'
             repo.index.commit(commit_message)
             print(f"Committed changes with message: '{commit_message}'")
         else:
@@ -122,9 +122,9 @@ class Expts_manager(object):
             else:
                 print(f'clone template - payu clone!','\n')
                 # payu clone -B master -b ctrl test/1deg_jra55_ryf test/1deg_jra55_ryf_test
-                command = f'payu clone -B {BRANCH_NAME_BASE} -b {BRANCH_PERTURB} {self.template_path} {expt_path}'
+                command = f'payu clone -B {BRANCH_NAME_BASE} -b {BRANCH_PERTURB} {self.template_path} {expt_path}' # automatically leave a commit with expt uuid
                 test = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-    
+                
                 # apply changes and write them to `MOM_override`
                 MOM6_or_parser = self._parser_mom6_input(os.path.join(expt_path, 'MOM_override'))
                 MOM6_or_parser.param_dict = self.param_dict_change_list[i]
@@ -149,20 +149,28 @@ class Expts_manager(object):
 
                 # replace metadata in archive/
                 shutil.copy(metadata_path,os.path.join(expt_path,'archive'))
-
-                # git commit
-                # repo = git.Repo(expt_path)
-                # print(_get_changed_files_git(repo))
     
                 repo = git.Repo(expt_path)
+                num_rebase_commits = 2
+                previous_commit_messages = self._get_previous_commit_messages(repo,num_rebase_commits) # 2 is the num_commits
+                print(previous_commit_messages)
+
                 changed_files = self._get_changed_files(repo)
                 untracked_files = self._get_untracked_files(repo)
                 files_to_stages = set(changed_files+untracked_files)
+                
                 if files_to_stages:
                     print(files_to_stages)
                     repo.index.add(files_to_stages)
                     commit_message = f"Payu clone from the base: {self.template_path}; staged files/directories are: {', '.join(f'{i}' for i in files_to_stages)}"
                     repo.index.commit(commit_message)
+
+                    # Amend the previous commit with the combined message to the latest commit
+                    combined_commit_messages = f"{commit_message}"+ "\n".join(previous_commit_messages)
+
+                    # rebase and apply new messages
+                    self._rebase_and_apply_messages(repo, num_rebase_commits, combined_commit_messages)
+                    print("Previous and current messages combined, commits rebased and ammended.")
                 else:
                     print('No files are required to be committed!')
 
@@ -172,7 +180,39 @@ class Expts_manager(object):
     def _get_changed_files(self,repo):
         return [file.a_path for file in repo.index.diff(None)]    
     
-            
+    def _get_previous_commit_messages(self,repo, num_commits):
+        messages = []
+        commit = repo.head.commit  # get the head commit
+        for _ in range(num_commits):
+            if commit.parents:
+                commit = commit.parents[0]
+                messages.append(commit.message.strip())
+            else:
+                break
+        return messages
+    def _rebase_and_apply_messages(self, repo, len_previous_messages, combined_messages):
+        try:
+            repo.git.rebase('-i',f'HEAD~{len_previous_messages+1}')
+        except git.GitCommandError as e:
+            print(f"Error at rebasing: {e}")
+            return
+
+        rebase_file_path = repo.git_dir + '/rebase-merge/git-rebase-todo'  # rebase instructions
+        with open(rebase_file_path, 'r') as file:
+            rebase_instructions = file.readlines()
+        
+        with open(rebase_file_path, 'w') as file:  # modify rebase instructions 
+            for line in rebase_instructions:
+                if line.startswith('pick'):
+                    # Replace 'pick' with `r` for the commits to be combined
+                    line = line.replace('pick', 'r', len_previous_messages)
+                file.write(line)
+        # Apply messages to the last commit
+        repo.git.commit('--amend','-m',combined_messages)
+
+        # Continue to rebase
+        repo.git.rebase('--continue')
+                
     def _read_ryaml(self, yaml_path):
         """ Read yaml file."""
         with open(yaml_path, 'r') as f:
