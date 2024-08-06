@@ -1,5 +1,6 @@
 import os,sys,copy
 import git,subprocess
+import shutil
 
 try:
     import yaml
@@ -60,7 +61,7 @@ class Expts_manager(object):
         else:
             base_branch = repo.branches[BRANCH_NAME_BASE]
         base_branch.checkout()
-        print(f"Check out the base branch: {BRANCH_NAME_BASE}")
+        print(f"Checkout the base branch: {BRANCH_NAME_BASE}")
         template_config_data = self._read_ryaml(os.path.join(self.template_path,'config.yaml'))
         tmp_template_config_data = copy.deepcopy(template_config_data) # before changed
         template_config_data['metadata']['enable'] = True
@@ -109,6 +110,7 @@ class Expts_manager(object):
 
     def manage_expts(self):
         for i in range(len(self.param_dict_change_list)):
+            # for each experiment
             expt_name = '_'.join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()]) 
             rel_path  = '_'.join([EXPT_REL_PATH,expt_name])
             expt_path = os.path.join(self.dir_manager,rel_path)
@@ -116,6 +118,7 @@ class Expts_manager(object):
 
             if os.path.exists(expt_path):
                 print(' -- not creating ', rel_path, ' - already exists!','\n')
+                
             else:
                 print(f'clone template - payu clone!','\n')
                 # payu clone -B master -b ctrl test/1deg_jra55_ryf test/1deg_jra55_ryf_test
@@ -143,6 +146,32 @@ class Expts_manager(object):
                 metadata['keywords'] = f"{BRANCH_NAME_BASE}, {BRANCH_PERTURB}, {keywords}"
                 self._remove_metadata_comments('keywords', metadata)
                 self._write_ryaml(metadata_path, metadata)
+
+                # replace metadata in archive/
+                shutil.copy(metadata_path,os.path.join(expt_path,'archive'))
+
+                # git commit
+                # repo = git.Repo(expt_path)
+                # print(_get_changed_files_git(repo))
+    
+                repo = git.Repo(expt_path)
+                changed_files = self._get_changed_files(repo)
+                untracked_files = self._get_untracked_files(repo)
+                files_to_stages = set(changed_files+untracked_files)
+                if files_to_stages:
+                    print(files_to_stages)
+                    repo.index.add(files_to_stages)
+                    commit_message = f"Payu clone from the base: {self.template_path}; staged files/directories are: {', '.join(f'{i}' for i in files_to_stages)}"
+                    repo.index.commit(commit_message)
+                else:
+                    print('No files are required to be committed!')
+
+    def _get_untracked_files(self,repo):
+        return repo.untracked_files
+    
+    def _get_changed_files(self,repo):
+        return [file.a_path for file in repo.index.diff(None)]    
+    
             
     def _read_ryaml(self, yaml_path):
         """ Read yaml file."""
