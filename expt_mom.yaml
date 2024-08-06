@@ -1,0 +1,18 @@
+# parameters for ensemble.py
+
+template: test/MOM6-CICE6  # relative path to a control experiment; perturbations are based on the latest commit to the current branch
+
+startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
+
+nruns: 1  # total number of output directories to generate for each ensemble member
+
+namelists:  # parameter values to use for ensemble
+#    ice/cice_in.nml:
+#        shortwave_nml:
+#            albicei: [ .3, .44, .5 ]
+#
+    MOM_list:
+        DT:                    [1800.0, 1800.0]
+        DT_THERM:              [3600.0, 7200.0]
+        DIABATIC_FIRST:        [False , False ]
+        THERMO_SPANS_COUPLING: [True  , True  ]
