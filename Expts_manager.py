@@ -219,7 +219,10 @@ class Expts_manager(object):
             
     def _update_metadata_description(self, metadata):
         """Update metadata description with experiment details."""
-        desc = (f'\nNOTE: this is a perturbation experiment, but the description above is for the control run.'
+        desc = metadata['description']
+        if desc is None:
+            desc = ''
+        desc += (f'\nNOTE: this is a perturbation experiment, but the description above is for the control run.'
                 f'\nThis perturbation experiment is based on the control run {self.template_path}')
         if self.startfrom == 'rest':
             desc += '\nbut with condition of rest.'
