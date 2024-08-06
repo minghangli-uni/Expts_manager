@@ -151,26 +151,16 @@ class Expts_manager(object):
                 shutil.copy(metadata_path,os.path.join(expt_path,'archive'))
     
                 repo = git.Repo(expt_path)
-                num_rebase_commits = 2
-                previous_commit_messages = self._get_previous_commit_messages(repo,num_rebase_commits) # 2 is the num_commits
-                print(previous_commit_messages)
-
+                
                 changed_files = self._get_changed_files(repo)
                 untracked_files = self._get_untracked_files(repo)
                 files_to_stages = set(changed_files+untracked_files)
                 
                 if files_to_stages:
-                    print(files_to_stages)
+                    print(f'files need to be staged: {files_to_stages}')
                     repo.index.add(files_to_stages)
                     commit_message = f"Payu clone from the base: {self.template_path}; staged files/directories are: {', '.join(f'{i}' for i in files_to_stages)}"
                     repo.index.commit(commit_message)
-
-                    # Amend the previous commit with the combined message to the latest commit
-                    combined_commit_messages = f"{commit_message}"+ "\n".join(previous_commit_messages)
-
-                    # rebase and apply new messages
-                    self._rebase_and_apply_messages(repo, num_rebase_commits, combined_commit_messages)
-                    print("Previous and current messages combined, commits rebased and ammended.")
                 else:
                     print('No files are required to be committed!')
 
@@ -178,35 +168,39 @@ class Expts_manager(object):
         return repo.untracked_files
     
     def _get_changed_files(self,repo):
-        return [file.a_path for file in repo.index.diff(None)]    
+        return [file.a_path for file in repo.index.diff(None)]   
     
     def _get_previous_commit_messages(self,repo, num_commits):
         messages = []
         commit = repo.head.commit  # get the head commit
         for _ in range(num_commits):
+            messages.append(commit.message.strip())
             if commit.parents:
                 commit = commit.parents[0]
-                messages.append(commit.message.strip())
             else:
                 break
         return messages
-    def _rebase_and_apply_messages(self, repo, len_previous_messages, combined_messages):
-        try:
-            repo.git.rebase('-i',f'HEAD~{len_previous_messages+1}')
-        except git.GitCommandError as e:
-            print(f"Error at rebasing: {e}")
-            return
+        
+    def _rebase_and_squash(self, repo, num_commits):
+        previous_messages = self._get_previous_commit_messages(repo,num_commits) 
+        combined_messages =  "\n\n".join(previous_messages)
+        print(combined_messages)
+        
+        repo.git.rebase('-i',f'HEAD~{num_commits}')
 
-        rebase_file_path = repo.git_dir + '/rebase-merge/git-rebase-todo'  # rebase instructions
+        rebase_file_path = os.path.join(repo.git_dir,'/rebase-merge/git-rebase-todo')  # rebase instructions
         with open(rebase_file_path, 'r') as file:
             rebase_instructions = file.readlines()
+        print(rebase_instructions)
         
         with open(rebase_file_path, 'w') as file:  # modify rebase instructions 
+            first = True
             for line in rebase_instructions:
-                if line.startswith('pick'):
-                    # Replace 'pick' with `r` for the commits to be combined
-                    line = line.replace('pick', 'r', len_previous_messages)
+                if line.startswith('pick') and not first:
+                    line = line.replace('pick', 'squash', 1)
+                first = False
                 file.write(line)
+                
         # Apply messages to the last commit
         repo.git.commit('--amend','-m',combined_messages)
 
