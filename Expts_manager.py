@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+
 import os,sys,copy
 import git,subprocess
 import shutil
 import glob
+import argparse
 
 try:
     import yaml
@@ -271,15 +274,25 @@ class Expts_manager(object):
         # Continue to rebase
         repo.git.rebase("--continue")
 
+    def main(self):
+        parser = argparse.ArgumentParser(description="Manage ACCESS-OM3 experiments.\
+                 Latest version and help: https://github.com/minghangli-uni/Expts_manager")
+        parser.add_argument("INPUT_YAML", type=str, nargs="?",default="expt_mom.yaml",
+                            help="YAML file specifying parameter values for expt runs. Default is expt_mom.yaml")
+        args = parser.parse_args()
+        INPUT_YAML = vars(args)["INPUT_YAML"]
+        
+        clock_options = {"stop_option":"ndays",
+                "restart_option":"ndays",
+                "stop_n":1,
+                "restart_n":1,
+                }
+        
+        yamlfile     = os.path.join(DIR_MANAGER,INPUT_YAML)
+        self.setup_template(yamlfile,clock_options)
+        self.manage_expts()
+
 if __name__ == "__main__":
-    INPUT_YAML   = "./expt_mom.yaml"
-    clock_options = {"stop_option":"ndays",
-            "restart_option":"ndays",
-            "stop_n":1,
-            "restart_n":1,
-            }
     expt_manager = Expts_manager()
-    yamlfile     = os.path.join(DIR_MANAGER,INPUT_YAML)
-    expt_manager.setup_template(yamlfile,clock_options)
-    expt_manager.manage_expts()
+    expt_manager.main()
 
