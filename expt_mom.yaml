@@ -1,12 +1,12 @@
-# parameters for ensemble.py
+# parameters for Expts_manager.py
 
 template: test/MOM6-CICE6  # relative path to a control experiment; perturbations are based on the latest commit to the current branch
 
 startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
 
-nruns: 1  # total number of output directories to generate for each ensemble member
+nruns: 1  # total number of output directories to generate for each Expts_manager member
 
-namelists:  # parameter values to use for ensemble
+namelists:  # parameter values to use for Expts_manager.py
 #    ice/cice_in.nml:
 #        shortwave_nml:
 #            albicei: [ .3, .44, .5 ]
