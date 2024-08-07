@@ -143,13 +143,13 @@ class Expts_manager(object):
             expt_name = '_'.join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()]) 
             rel_path  = '_'.join([EXPT_REL_PATH,expt_name])
             expt_path = os.path.join(self.dir_manager,rel_path)
-            print(expt_path)
+            print(f"\n {expt_path}")
 
             if os.path.exists(expt_path):
-                print("\n -- not creating ", rel_path, " - already exists!","\n")
+                print("-- not creating ", rel_path, " - already exists!")
                 
             else:
-                print("\n clone template - payu clone!")
+                print("clone template - payu clone!")
                 command = f"payu clone -B {BRANCH_NAME_BASE} -b {BRANCH_PERTURB} {self.template_path} {expt_path}" # automatically leave a commit with expt uuid
                 test = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
                 
