@@ -4,6 +4,12 @@ template: git@github.com:minghangli-uni/MOM6-CICE6.git  # relative path to a con
 template_branch_name: 1deg_jra55do_ryf
 base_branch_name: ctrl
 test_path: ./test2
+
+config_yaml:
+    metadata:
+        enable: true
+    runlog: false
+
 nuopc_runconfig:
 #    CLOCK_attributes:
 #        stop_option: ndays

@@ -81,7 +81,7 @@ class Expts_manager(object):
             subprocess.run(command, shell=True, check=False)
             print(f"Baseline is created located at {base_path}")
 
-        # Update nuopc clock options
+        # Update nuopc.runconfig
         nuopc_input = self.indata["nuopc_runconfig"]
         if nuopc_input is not None:
             nuopc_file_path = os.path.join(base_path,"nuopc.runconfig")
@@ -89,14 +89,15 @@ class Expts_manager(object):
             self.update_nuopc_runconfig(nuopc_runconfig,nuopc_input)
             write_nuopc_config(nuopc_runconfig, nuopc_file_path)
             
-    def update_nuopc_runconfig(self,base,change):
-        """ recursively update nuopc_runconfig entries """
-        for k,v in change.items():
-            if isinstance(v,dict) and k in base:
-                self.update_nuopc_runconfig(base[k],v)
-            else:
-                base[k] = v
-        
+        # Update config.yaml
+        config_yaml_input = self.indata["config_yaml"]
+        if config_yaml_input is not None:
+            config_yaml_file = os.path.join(base_path,"config.yaml")
+            config_yaml = self._read_ryaml(config_yaml_file)
+            self.update_nuopc_runconfig(config_yaml,config_yaml_input)
+            self._write_ryaml(config_yaml_file,config_yaml)
+
+    
     def setup_template(self, template_yamlfile,clock_options):
         """Setup the template by 
            reading YAML file,
@@ -248,6 +249,14 @@ class Expts_manager(object):
                 else:
                     print(f"{expt_path} has already completed {doneruns} runs! Hence stop without running!")
 
+    def update_nuopc_runconfig(self,base,change):
+        """ recursively update nuopc_runconfig entries """
+        for k,v in change.items():
+            if isinstance(v,dict) and k in base:
+                self.update_nuopc_runconfig(base[k],v)
+            else:
+                base[k] = v
+                
     def _get_untracked_files(self,repo):
         return repo.untracked_files
     
