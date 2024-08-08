@@ -1,34 +1,35 @@
 # parameters for Expts_manager.py
 
-template: git@github.com:minghangli-uni/MOM6-CICE6.git  # relative path to a control experiment; perturbations are based on the latest commit to the current branch
-template_branch_name: 1deg_jra55do_ryf
-test_path: ./test2
-base_branch_name: ctrl
+template: git@github.com:minghangli-uni/MOM6-CICE6.git  # git url to a control experiment; perturbations are based on the latest commit to the current branch
+template_branch_name: 1deg_jra55do_ryf  # branch for the control experiment
+test_path: ./test_tracer-timestep  # path for the test runs, including a control run and multiple experiment runs
+base_branch_name: ctrl  # base branch name for the control run
 
-# =================================== 
-config_yaml:
-#    metadata:
-#        enable: true
-#    runlog: false
-cpl_dt: 
-nuopc_runconfig:
-#    CLOCK_attributes:
-#        stop_option: ndays
-#        stop_n: 1
-#        restart_option: ndays
-#        restart_n: 1
-namelists:  # parameter values to use for Expts_manager.py
+# ============ ctrl run ======================= 
+config_yaml: # all entries in config.yaml
+    jobname: 1deg_jra55_ryf_ctrl
+    metadata:
+        enable: true
+    runlog: true
+cpl_dt:  # coupling timestep in nuopc_runseq 
+nuopc_runconfig:  # all entries in nuopc_runconfig
+    CLOCK_attributes:
+        stop_option: ndays
+        stop_n: 1
+        restart_option: ndays
+        restart_n: 1
+# ===================================
+namelists:  # parameter values for expt runs.
 #    ice/cice_in.nml:
 #        shortwave_nml:
 #            albicei: [ .3, .44, .5 ]
 #
-    MOM_list:
+    MOM_list:  # accepts changes of one or multiple parameters, 
         DT:                    [1800.0, 1800.0]
         DT_THERM:              [3600.0, 7200.0]
         DIABATIC_FIRST:        [False , False ]
         THERMO_SPANS_COUPLING: [True  , True  ]
 # ===================================
 startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
-
 nruns: 1  # total number of output directories to generate for each Expts_manager member
 

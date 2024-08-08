@@ -1,6 +1,3 @@
-[submodule "test/MOM6-CICE6"]
-	path = test/MOM6-CICE6
-	url = git@github.com:minghangli-uni/MOM6-CICE6.git
 [submodule "tools/om3-utils"]
 	path = tools/om3-utils
 	url = git@github.com:minghangli-uni/om3-utils.git
