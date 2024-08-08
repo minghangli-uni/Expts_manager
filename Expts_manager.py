@@ -85,7 +85,7 @@ class Expts_manager(object):
         if nuopc_input is not None:
             nuopc_file_path = os.path.join(base_path,"nuopc.runconfig")
             nuopc_runconfig = read_nuopc_config(nuopc_file_path)
-            self.update_nuopc_runconfig(nuopc_runconfig,nuopc_input)
+            self.update_configs(nuopc_runconfig,nuopc_input)
             write_nuopc_config(nuopc_runconfig, nuopc_file_path)
             
         # Update config.yaml
@@ -93,7 +93,7 @@ class Expts_manager(object):
         if config_yaml_input is not None:
             config_yaml_file = os.path.join(base_path,"config.yaml")
             config_yaml = self._read_ryaml(config_yaml_file)
-            self.update_nuopc_runconfig(config_yaml,config_yaml_input)
+            self.update_configs(config_yaml,config_yaml_input)
             self._write_ryaml(config_yaml_file,config_yaml)
 
         # Update coupling timestep through nuopc.runseq
@@ -102,7 +102,6 @@ class Expts_manager(object):
             nuopc_runseq_file = os.path.join(base_path,"nuopc.runseq")
             self.update_cpl_dt_nuopc_seq(nuopc_runseq_file,cpl_dt_input)
 
-        
         # check file changes
         repo = git.Repo(base_path)
         print(f"Current base branch is: {repo.active_branch.name}")
@@ -115,12 +114,11 @@ class Expts_manager(object):
         else:
             print(f"Nothing changed, hence no further commits to the {base_path} repo!")
 
-
-    def update_nuopc_runconfig(self,base,change):
-        """ recursively update nuopc_runconfig entries """
+    def update_configs(self,base,change):
+        """ recursively update nuopc_runconfig and config.yaml entries """
         for k,v in change.items():
             if isinstance(v,dict) and k in base:
-                self.update_nuopc_runconfig(base[k],v)
+                self.update_configs(base[k],v)
             else:
                 base[k] = v
 

@@ -17,11 +17,6 @@ nuopc_runconfig:
 #        stop_n: 1
 #        restart_option: ndays
 #        restart_n: 1
-# ===================================
-startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
-
-nruns: 1  # total number of output directories to generate for each Expts_manager member
-
 namelists:  # parameter values to use for Expts_manager.py
 #    ice/cice_in.nml:
 #        shortwave_nml:
@@ -32,3 +27,8 @@ namelists:  # parameter values to use for Expts_manager.py
         DT_THERM:              [3600.0, 7200.0]
         DIABATIC_FIRST:        [False , False ]
         THERMO_SPANS_COUPLING: [True  , True  ]
+# ===================================
+startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
+
+nruns: 1  # total number of output directories to generate for each Expts_manager member
+
