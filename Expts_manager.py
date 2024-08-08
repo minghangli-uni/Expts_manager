@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os,sys,copy
+import re,os,sys,copy
 import git,subprocess
 import shutil
 import glob
@@ -76,7 +76,6 @@ class Expts_manager(object):
             print(f"Base path is already created located at {base_path}")
         else:
             print(f"template ctrl clone {template_branch_name} from {template} to {base_rel_path} as a branch of {base_branch_name}!")
-            # payu clone -B <branch> -b <new_branch> git@github.com:ACCESS-NRI/access-om2-configs.git <experiment_name>
             command = f"payu clone -B {template_branch_name} -b {base_branch_name} {template} {base_path}"
             subprocess.run(command, shell=True, check=False)
             print(f"Baseline is created located at {base_path}")
@@ -97,6 +96,51 @@ class Expts_manager(object):
             self.update_nuopc_runconfig(config_yaml,config_yaml_input)
             self._write_ryaml(config_yaml_file,config_yaml)
 
+        # Update coupling timestep through nuopc.runseq
+        cpl_dt_input = self.indata["cpl_dt"]
+        if cpl_dt_input is not None:
+            nuopc_runseq_file = os.path.join(base_path,"nuopc.runseq")
+            self.update_cpl_dt_nuopc_seq(nuopc_runseq_file,cpl_dt_input)
+
+        
+        # check file changes
+        repo = git.Repo(base_path)
+        print(f"Current base branch is: {repo.active_branch.name}")
+        changed_files = self._get_changed_files(repo)
+        if changed_files:
+            print(f"Configure '{base_branch_name}' branch in preparation for expt runs!")
+            repo.index.add(changed_files)
+            commit_message = f"Configure '{base_branch_name}' branch in preparation for expt runs!"
+            repo.index.commit(commit_message)
+        else:
+            print(f"Nothing changed, hence no further commits to the {base_path} repo!")
+
+
+    def update_nuopc_runconfig(self,base,change):
+        """ recursively update nuopc_runconfig entries """
+        for k,v in change.items():
+            if isinstance(v,dict) and k in base:
+                self.update_nuopc_runconfig(base[k],v)
+            else:
+                base[k] = v
+
+    def update_cpl_dt_nuopc_seq(self,seq_path,update_cpl_dt):
+        with open(seq_path,'r') as f:
+            lines = f.readlines()
+        #print(lines)
+        
+        pattern = re.compile(r'@(\S*)')
+        update_lines = []
+        for l in lines:
+            matches = pattern.findall(l)
+            if matches:
+                update_line = re.sub(r'@(\S+)', f'@{update_cpl_dt}', l)
+                update_lines.append(update_line)
+            else:
+                update_lines.append(l)
+        with open(seq_path,'w') as f:
+            f.writelines(update_lines)
+            
     
     def setup_template(self, template_yamlfile,clock_options):
         """Setup the template by 
@@ -249,13 +293,6 @@ class Expts_manager(object):
                 else:
                     print(f"{expt_path} has already completed {doneruns} runs! Hence stop without running!")
 
-    def update_nuopc_runconfig(self,base,change):
-        """ recursively update nuopc_runconfig entries """
-        for k,v in change.items():
-            if isinstance(v,dict) and k in base:
-                self.update_nuopc_runconfig(base[k],v)
-            else:
-                base[k] = v
                 
     def _get_untracked_files(self,repo):
         return repo.untracked_files
