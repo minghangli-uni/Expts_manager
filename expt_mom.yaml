@@ -1,7 +1,15 @@
 # parameters for Expts_manager.py
 
-template: test/MOM6-CICE6  # relative path to a control experiment; perturbations are based on the latest commit to the current branch
-
+template: git@github.com:minghangli-uni/MOM6-CICE6.git  # relative path to a control experiment; perturbations are based on the latest commit to the current branch
+template_branch_name: 1deg_jra55do_ryf
+base_branch_name: ctrl
+test_path: ./test2
+nuopc_runconfig:
+#    CLOCK_attributes:
+#        stop_option: ndays
+#        stop_n: 1
+#        restart_option: ndays
+#        restart_n: 1
 startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
 
 nruns: 1  # total number of output directories to generate for each Expts_manager member

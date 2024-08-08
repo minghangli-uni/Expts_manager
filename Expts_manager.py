@@ -20,7 +20,7 @@ except ImportError:
 DIR_MANAGER     = os.getcwd()
 DIR_UTILS       = os.path.join(DIR_MANAGER,"tools/om3-utils")
 BRANCH_NAME     = "1deg_jra55do_ryf"
-BRANCH_NAME_BASE= "_".join([BRANCH_NAME,"base"])
+BRANCH_NAME_BASE= "_".join([BRANCH_NAME,"baseline"])
 BRANCH_PERTURB  = "perturbation"
 TEST_REL_PATH   = "test"
 EXPT_REL_PATH   = "/".join([TEST_REL_PATH,BRANCH_NAME])
@@ -56,6 +56,47 @@ class Expts_manager(object):
         self.startfrom = None
         self.indata = None
 
+    def setup_template_through_payu(self,yamlfile):
+        self.indata = self._read_ryaml(yamlfile)
+        template = self.indata["template"]
+        template_branch_name = self.indata["template_branch_name"]
+        base_branch_name = self.indata["base_branch_name"]
+        base_rel_path = '_'.join([template_branch_name,base_branch_name])
+        test_path = self.indata["test_path"]
+        
+        if os.path.exists(test_path):
+            print(f"test directory {test_path} already exists!")    
+        else:
+            os.makedirs(test_path)
+            print(f"test directory {test_path} is created!")
+        
+        base_path = os.path.join(test_path,base_rel_path)
+        
+        if os.path.exists(base_path):
+            print(f"Base path is already created located at {base_path}")
+        else:
+            print(f"template ctrl clone {template_branch_name} from {template} to {base_rel_path} as a branch of {base_branch_name}!")
+            # payu clone -B <branch> -b <new_branch> git@github.com:ACCESS-NRI/access-om2-configs.git <experiment_name>
+            command = f"payu clone -B {template_branch_name} -b {base_branch_name} {template} {base_path}"
+            subprocess.run(command, shell=True, check=False)
+            print(f"Baseline is created located at {base_path}")
+
+        # Update nuopc clock options
+        nuopc_input = self.indata["nuopc_runconfig"]
+        if nuopc_input is not None:
+            nuopc_file_path = os.path.join(base_path,"nuopc.runconfig")
+            nuopc_runconfig = read_nuopc_config(nuopc_file_path)
+            self.update_nuopc_runconfig(nuopc_runconfig,nuopc_input)
+            write_nuopc_config(nuopc_runconfig, nuopc_file_path)
+            
+    def update_nuopc_runconfig(self,base,change):
+        """ recursively update nuopc_runconfig entries """
+        for k,v in change.items():
+            if isinstance(v,dict) and k in base:
+                self.update_nuopc_runconfig(base[k],v)
+            else:
+                base[k] = v
+        
     def setup_template(self, template_yamlfile,clock_options):
         """Setup the template by 
            reading YAML file,
@@ -289,8 +330,9 @@ class Expts_manager(object):
                 }
         
         yamlfile     = os.path.join(DIR_MANAGER,INPUT_YAML)
-        self.setup_template(yamlfile,clock_options)
-        self.manage_expts()
+        self.setup_template_through_payu(yamlfile)
+        #self.setup_template(yamlfile,clock_options)
+        #self.manage_expts()
 
 if __name__ == "__main__":
     expt_manager = Expts_manager()
