@@ -2,9 +2,10 @@
 
 template: git@github.com:minghangli-uni/MOM6-CICE6.git  # git url to a control experiment; perturbations are based on the latest commit to the current branch
 template_branch_name: 1deg_jra55do_ryf  # branch for the control experiment
+#template_commit: 
 test_path: ./test_tracer-timestep  # path for the test runs, including a control run and multiple experiment runs
 base_branch_name: ctrl  # base branch name for the control run
-
+expt_names: ['expt1','expt2']  # if exists, the len must be the same length as the columns of MOM_list; otherwise, the expt_names will be automatically generated based on the tunning parameters and associated values in the MOM_list.
 # ============ ctrl run ======================= 
 config_yaml: # all entries in config.yaml
     jobname: 1deg_jra55_ryf_ctrl
@@ -18,7 +19,7 @@ nuopc_runconfig:  # all entries in nuopc_runconfig
         stop_n: 1
         restart_option: ndays
         restart_n: 1
-# ===================================
+# ============ namelist tunning =============== 
 namelists:  # parameter values for expt runs.
 #    ice/cice_in.nml:
 #        shortwave_nml:
@@ -29,7 +30,7 @@ namelists:  # parameter values for expt runs.
         DT_THERM:              [3600.0, 7200.0]
         DIABATIC_FIRST:        [False , False ]
         THERMO_SPANS_COUPLING: [True  , True  ]
-# ===================================
+# ============ expt run =======================
 startfrom: 'rest'  # if integer: restart number of control experiment to use as initial condition for perturbation experiments; or use 'rest' to start perturbations from rest
 nruns: 1  # total number of output directories to generate for each Expts_manager member
 

@@ -63,6 +63,7 @@ class Expts_manager(object):
         self.base_branch_name = None
         self.base_path = None
         self.test_path = None
+        self.expt_names = None
 
     def setup_ctrl_expt(self,yamlfile):
         self.expt_yaml = self._read_ryaml(yamlfile)
@@ -212,11 +213,16 @@ class Expts_manager(object):
         """ setup expts, and run expts"""
         for i in range(len(self.param_dict_change_list)):
             # for each experiment
-            expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])
+            # Update experiment folder names if existed in the `expt_yaml`
+            expts_input = self.expt_yaml["expt_names"]
+            if expts_input is None:
+                nuopc_file_path = os.path.join(self.base_path,"nuopc.runconfig")
+                expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])
+            else:
+                expt_name = expts_input[i]
             rel_path = os.path.join(self.test_path,expt_name)
             expt_path = os.path.join(self.dir_manager,rel_path)
             print(f"\n {expt_path}")
-
             if os.path.exists(expt_path):
                 print("-- not creating ", rel_path, " - already exists!")
             else:
