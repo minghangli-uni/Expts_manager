@@ -68,7 +68,6 @@ class Expts_manager(object):
         self.startfrom_str = str(self.startfrom).strip().lower().zfill(3)  # define `startfrom_str` following `Expts_manager.yaml`
         self.nruns = self.indata["nruns"]
         self.ice_in_ctrl = None
-        
 
     def load_tools(self):
         """Load external tools required for the experiments."""
