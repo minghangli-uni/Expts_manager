@@ -148,7 +148,6 @@ class Expts_manager(object):
         if namelists is not None:
             print("==== Perturbation experiments ====")
             for k,nmls in namelists.items(): 
-                #print(k,nmls) # MOM_input {'combo_thermo_dt': {'DT_THERM': [3600.0, 7200.0, 9000.0, 1800.0], 'DIABATIC_FIRST': [False, False, False, True], 'THERMO_SPANS_COUPLING': [True, True, True, False]}, 'thickness_diffusivity': {'THICKNESSDIFFUSE': False}, 'hfreeze_change': {'HFREEZE': [12, 14]}}
                 if k.startswith('ice_input'):
                     self.tag_model = 'cice'
                     for group, names in nmls.items():  
@@ -183,8 +182,6 @@ class Expts_manager(object):
                             if MOM_expt_dir in nmls:
                                 self.expt_names = nmls[MOM_expt_dir]
                                 if self.expt_names is not None:
-                                    print(f"New folder name: {self.expt_names}")
-                                    print(len(self.expt_names))
                                     if len(self.expt_names) != self.num_expts:
                                         raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
                                                          f"is different from that of tunning parameters {name_dict}!"
@@ -197,8 +194,6 @@ class Expts_manager(object):
                                 self._generate_combined_dicts(name_dict,commt_dict)
                             else:
                                 self._generate_individual_dicts(name_dict,commt_dict)
-                                
-                            #self._update_MOM6_param_dict_change2(name_dict, param_dict, commt_dict, k_sub)
                             self.manage_expts()
 
         else:
@@ -226,46 +221,6 @@ class Expts_manager(object):
             param_dict_change_list.append(param_dict_change)
         self.param_dict_change_list = param_dict_change_list
         self.commt_dict_change = {k: commt_dict.get(k,"") for k in name_dict}
-        
-    def _update_MOM6_param_dict_change2(self, name_dict, param_dict, commt_dict, k_sub):
-        keys = name_dict.keys()
-        param_dict_change_list      = []  # A list includes only changed parameter input dicts for all tests
-        for i in range(self.num_expts):
-            if self.num_expts == 1:
-                param_dict_change   = {key: name_dict[key] for key in keys}
-            else:
-                if k_sub.endswith("combo"):
-                    param_dict_change = {key: name_dict[key][i] for key in keys}
-                else:
-                    param_dict_change = {key: name_dict[key][i] for key in keys}
-            
-            if k_sub.endswith("combo") and any(param_dict[key] != param_dict_change[key] for key in keys):
-                param_dict_change_list.append(param_dict_change)
-            elif any(param_dict[key] != param_dict_change[key] for key in keys):
-                param_dict_change_list.append(param_dict_change)
-        self.param_dict_change_list = param_dict_change_list
-        self.commt_dict_change = {key: commt_dict.get(key,"") for key in keys}
-        
-    def _update_MOM6_param_dict_change(self, name_dict, param_dict, commt_dict):
-        """ load parameters, values and associated comments from the ctrl expt"""
-        keys = name_dict.keys()
-        param_dict_change_full_list = []  # A list includes full parameter input dicts for all tests
-        param_dict_change_list      = []  # A list includes only changed parameter input dicts for all tests
-        for i in range(self.num_expts):
-            tmp_param_dict_full = copy.deepcopy(param_dict)
-            if self.num_expts == 1:
-                param_dict_change   = {key: name_dict[key] for key in keys}
-            else:
-                param_dict_change   = {key: name_dict[key][i] for key in keys}
-            if any(param_dict[key] != param_dict_change[key] for key in keys):
-                for key in keys:
-                    tmp_param_dict_full[key] = param_dict_change[key]
-                param_dict_change_full_list.append(tmp_param_dict_full)
-                param_dict_change_list.append(param_dict_change)
-        self.param_dict_change_list = param_dict_change_list
-        print(self.param_dict_change_list)
-        self.param_dict_change_full_list = param_dict_change_full_list
-        self.commt_dict_change = {key: commt_dict.get(key,"") for key in keys}
         
     def _update_CICE_param_dict_change(self,group_cice,k_cice,v_cices):
         if isinstance(v_cices,list):
