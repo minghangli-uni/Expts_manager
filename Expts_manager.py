@@ -8,6 +8,7 @@ Apache 2.0 License http://www.apache.org/licenses/LICENSE-2.0.txt
 """
 # ===========================================================================
 import re,os,sys,copy,subprocess,shutil,glob,argparse
+from itertools import product
 
 try:
     import numpy as np
@@ -50,7 +51,13 @@ class Expts_manager(object):
         self.param_dict_change_list = []
         self.param_dict_change_full_list = []
         self.commt_dict_change = {}
-        self.append_group = []
+        self.append_group_list = []
+        self.MOM_prefix = "MOM_list"
+        self.combo_suffix = "_combo"
+        self.nml_suffix = "_nml"
+
+        self.previous_key = None
+        
 
     def load_variables(self,yamlfile):
         self.yamlfile = yamlfile  # path for Expts_manager.yaml 
@@ -148,23 +155,53 @@ class Expts_manager(object):
         if namelists is not None:
             print("==== Perturbation experiments ====")
             for k,nmls in namelists.items(): 
-                if k.startswith('ice_input'):
+                if k.startswith('CICE_input'):
                     self.tag_model = 'cice'
-                    for group, names in nmls.items():  
-                        for n,vs in names.items():
-                            print({group:{n:vs}})
-                            #self._update_CICE_param_dict_change(group,n,vs)
-                            #self.manage_expts(tag_model)
+                    cice_list_count = 0
+                    for k_sub in nmls:
+                        if k_sub.endswith(self.nml_suffix) or k_sub.endswith(self.combo_suffix):
+                            print(f"k_sub: {k_sub}")
+                            name_dict = nmls[k_sub]
+                            print(f"name_dict0: {name_dict}")
+                            if k_sub.endswith(self.combo_suffix):
+                                if isinstance(next(iter(name_dict.values())), list):
+                                    self.num_expts = len(next(iter(name_dict.values())))
+                                else:
+                                    self.num_expts = 1
+                            else:
+                                self.num_expts = 0
+                                for v_s in name_dict.values():
+                                    if isinstance(v_s,list):
+                                        self.num_expts += len(v_s)
+                                    else:
+                                        self.num_expts = 1
+                            print(f"number of experiments: {self.num_expts}")
+                            cice_list_count += 1
 
+                            if self.previous_key is not None and self.previous_key.startswith("CICE_expt_dir"):
+                                self.expt_names = nmls[self.previous_key]
+                                print(f"expt_names1: {self.expt_names}")
+                                if self.expt_names is not None:
+                                    if len(self.expt_names) != self.num_expts:
+                                        raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
+                                                         f"is different from that of tunning parameters {name_dict}!"
+                                                         f"\nPlease double check the number or leave it blank!") 
+                                print(f"Next parameter after '{self.previous_key}' is '{k_sub}'")
+                            commt_dict = None  # only valids for MOM_input
+                            if k_sub.endswith(self.combo_suffix):
+                                self._generate_combined_dicts(name_dict,commt_dict,k_sub)
+                            else:
+                                self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+                            self.manage_expts()
+                        self.previous_key = k_sub      
                 if k.startswith("MOM_input"):
                     self.tag_model = 'mom6'
                     mom_list_count = 0
                     for k_sub in nmls:
-                        if k_sub.startswith("MOM_list"):
-                            print(k_sub)
+                        if k_sub.startswith(self.MOM_prefix):
                             name_dict = nmls[k_sub]
                             print(f"{name_dict}")
-                            if k_sub.endswith("combo"):
+                            if k_sub.endswith(self.combo_suffix):
                                 if isinstance(next(iter(name_dict.values())), list):
                                     self.num_expts = len(next(iter(name_dict.values())))
                                 else:
@@ -178,62 +215,73 @@ class Expts_manager(object):
                                         self.num_expts = 1
                             print(f"number of experiments: {self.num_expts}")
                             mom_list_count += 1
-                            MOM_expt_dir = f"MOM_expt_dir{mom_list_count}"
-                            if MOM_expt_dir in nmls:
-                                self.expt_names = nmls[MOM_expt_dir]
+                            if self.previous_key is not None and self.previous_key.startswith("MOM_expt_dir"):
+                                self.expt_names = nmls[self.previous_key]
+                                print(f"expt_names1: {self.expt_names}")
                                 if self.expt_names is not None:
                                     if len(self.expt_names) != self.num_expts:
                                         raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
                                                          f"is different from that of tunning parameters {name_dict}!"
-                                                         f"\nPlease double check the number or leave it blank!")
-
+                                                         f"\nPlease double check the number or leave it blank!") 
+                                print(f"Next parameter after '{self.previous_key}' is '{k_sub}'")
                             MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, "MOM_input"))
                             param_dict = MOM_inputParser.param_dict
                             commt_dict = MOM_inputParser.commt_dict
-                            if k_sub.endswith("combo"):
-                                self._generate_combined_dicts(name_dict,commt_dict)
+                            if k_sub.endswith(self.combo_suffix):
+                                self._generate_combined_dicts(name_dict,commt_dict,k_sub)
                             else:
-                                self._generate_individual_dicts(name_dict,commt_dict)
+                                self._generate_individual_dicts(name_dict,commt_dict,k_sub)
                             self.manage_expts()
-
+                        self.previous_key = k_sub
         else:
             raise ValueError("namelists can't be None for paramater-tunning tests!")
 
-    def _generate_individual_dicts(self,name_dict,commt_dict):
+    def _generate_individual_dicts(self,name_dict,commt_dict,k_sub):
         """Each dictionary has a single key-value pair."""
         param_dict_change_list = []
+        append_group_list = []
         for k, vs in name_dict.items():
             if isinstance(vs, list):
                 for v in vs:
                     param_dict_change = {k: v}
                     param_dict_change_list.append(param_dict_change)
+                    append_group = k_sub
+                    append_group_list.append(append_group)
             else:
                 param_dict_change = {k: vs}
                 param_dict_change_list.append(param_dict_change)
+                append_group_list = [k_sub] 
         self.param_dict_change_list = param_dict_change_list
-        self.commt_dict_change = {k: commt_dict.get(k,"") for k in name_dict}
+        if self.tag_model == 'mom6':
+            self.commt_dict_change = {k: commt_dict.get(k,"") for k in name_dict}
+        elif self.tag_model == 'cice':
+            self.append_group_list = append_group_list
         
-    def _generate_combined_dicts(self,name_dict,commt_dict):
+    def _generate_combined_dicts(self,name_dict,commt_dict,k_sub):
         """Generate a list of dictionaries where each dictionary contains all keys with values from the same index."""
         param_dict_change_list = []
+        append_group_list = []
         for i in range(self.num_expts):
             param_dict_change = {k: name_dict[k][i] for k in name_dict}
+            append_group = k_sub
+            append_group_list.append(append_group)
             param_dict_change_list.append(param_dict_change)
         self.param_dict_change_list = param_dict_change_list
-        self.commt_dict_change = {k: commt_dict.get(k,"") for k in name_dict}
-        
-    def _update_CICE_param_dict_change(self,group_cice,k_cice,v_cices):
-        if isinstance(v_cices,list):
-            self.param_dict_change_list = [{k_cice: v_cice} for v_cice in v_cices]
-            self.append_group = [{group_cice: v_cice} for v_cice in v_cices]
-        else:
-            self.param_dict_change_list = [{k_cice: v_cices}]
-            self.append_group = [{group_cice: v_cices}]
+        if self.tag_model == 'mom6':
+            self.commt_dict_change = {k: commt_dict.get(k,"") for k in name_dict}
+        elif self.tag_model == 'cice':
+            self.append_group_list = append_group_list
             
     def manage_expts(self):
         """ setup expts, and run expts"""
         for i in range(len(self.param_dict_change_list)):
+            #print(f'testtest0:{i}')
             # for each experiment
+            param_dict = self.param_dict_change_list[i]
+            if self.tag_model == 'cice':
+                cice_group = self.append_group_list[i]
+
+            #print(f'testtest:{self.expt_names}')
             if self.expt_names is None:  
                 expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])  # if `expt_names` does not exist, expt_name is set as the tunning parameters appending with associated values
             else:
@@ -241,51 +289,76 @@ class Expts_manager(object):
             rel_path = os.path.join(self.test_path,expt_name)
             expt_path = os.path.join(self.dir_manager,rel_path)
 
-            # create perturbation experiment
-            if self.tag_model == 'cice':
-                cice_group,_ = next(iter(self.append_group[i].items()))  # cice tunned parameters (*.nml) in the yamlfile
-                cice_name,cice_value = next(iter(self.param_dict_change_list[i].items()))  # cice tunned parameters (param:value) in the yamlfile
-                turningangle = [cice_group, cice_name] == ['dynamics_nml', 'turning_angle']
-                if turningangle:
-                    cosw = np.cos(cice_value * np.pi / 180.)
-                    sinw = np.sin(cice_value * np.pi / 180.)
-                    
+
             if os.path.exists(expt_path):
                 print("-- not creating ", expt_path, " - already exists!")
             else:
+                # create perturbation experiment - check if needs 
                 if self.tag_model == 'cice':
-                    if turningangle:
-                        skip = self.ice_in_ctrl[cice_group]['cosw'] == cosw and self.ice_in_ctrl[cice_group]['sinw'] == sinw
-                    else:
-                        if cice_name in self.ice_in_ctrl.get(cice_group,{}):  # cice_name may not be found in the control experiment
-                            skip = self.ice_in_ctrl[cice_group][cice_name] == cice_value
+                    if cice_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
+                        cice_group = cice_group[:-len(self.combo_suffix)]
+                        
+                    print(f'param_dict: {param_dict}')
+                    cice_name = param_dict.keys()
+                    if len(cice_name) == 1:  # one param:value pair
+                        cice_value = param_dict[list(cice_name)[0]]
+                    else:  # combination of param:value pairs
+                        cice_value = [param_dict[j] for j in cice_name]
+                    print(f'cice_name: {cice_name}')
+                    print(f'cice_value: {cice_value}')
+                    
+                    if 'turning_angle' in param_dict:
+                        cosw = np.cos(param_dict['turning_angle'] * np.pi / 180.)
+                        sinw = np.sin(param_dict['turning_angle'] * np.pi / 180.)
+                        
+                    if all(cn in self.ice_in_ctrl.get(cice_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
+                        if 'turning_angle' in param_dict:
+                            skip = (self.ice_in_ctrl[cice_group]['cosw'] == cosw and 
+                                    self.ice_in_ctrl[cice_group]['sinw'] == sinw and
+                                    all(self.ice_in_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name if cn not in ['cosw', 'sinw']))
                         else:
-                            print(f"{cice_name} is not found in the {cice_group}!")
-                            skip = False
-                    if skip:  # if the value is the same as the control experiment, then skip the specific perturbation experiment
+                            skip = all(self.ice_in_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name)
+                    else:
+                        print(f"Not all {cice_name} are found in {cice_group}, hence not skipping!")
+                        skip = False
+    
+                    if skip:
                         print('-- not creating', expt_path, '- parameters are identical to', self.base_path)
                         continue
-                if self.tag_model == 'mom6': # TODO
+                    
+                if self.tag_model == 'mom6': # might need MOM_parameter.all, because many parameters are in-default and not shown up in `MOM_input` 
+                    #TODO
                     pass
+                    
                 print(f"Directory {expt_path} not exists, hence cloning template!")
                 command = f"payu clone -B {self.base_branch_name} -b {BRANCH_PERTURB} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
                 subprocess.run(command, shell=True, check=True)
 
-            # Update `ice_in` or `MOM_override`
+            
+            # Update `MOM_override` or/and `ice_in`
             if self.tag_model == 'mom6':
                 # apply changes and write them to `MOM_override`
                 MOM6_or_parser = self._parser_mom6_input(os.path.join(expt_path, "MOM_override"))  # parse MOM_override
-                MOM6_or_parser.param_dict, MOM6_or_parser.commt_dict = update_MOM6_params_override(self.param_dict_change_list[i],self.commt_dict_change)  # update the tunning parameters, values and associated comments
+                MOM6_or_parser.param_dict, MOM6_or_parser.commt_dict = update_MOM6_params_override(param_dict,self.commt_dict_change)  # update the tunning parameters, values and associated comments
                 MOM6_or_parser.writefile_MOM_input(os.path.join(expt_path, "MOM_override"))  # write to file
+                
             elif self.tag_model == 'cice':
+                # do changes
                 cice_path = os.path.join(expt_path,"ice_in")
-                if turningangle:
-                    f90nml.patch(cice_path, {cice_group: {'cosw': cosw}}, cice_path+'_tmp')
-                    f90nml.patch(cice_path+'_tmp', {cice_group: {'sinw': sinw}}, cice_path+'_tmp2')
-                    os.remove(cice_path+'_tmp')
-                else:
-                    f90nml.patch(cice_path, {cice_group: {cice_name: cice_value}}, cice_path+'_tmp2')
-                os.rename(cice_path+'_tmp2',cice_path)
+                if cice_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
+                    cice_group = cice_group[:-len(self.combo_suffix)]
+                patch_dict = {cice_group: {}}
+                for cice_name, cice_value in param_dict.items():
+                    if cice_name == 'turning_angle':
+                        cosw = np.cos(cice_value * np.pi / 180.)
+                        sinw = np.sin(cice_value * np.pi / 180.)
+                        # Add to the patch dictionary
+                        patch_dict[cice_group]['cosw'] = cosw
+                        patch_dict[cice_group]['sinw'] = sinw
+                    else:
+                        patch_dict[cice_group][cice_name] = cice_value
+                f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
+                os.rename(cice_path+'_tmp',cice_path)
 
             if self.startfrom_str != 'rest':  # symlink restart directories
                 link_restart = os.path.join('archive','restart'+self.startfrom_str)  # 
@@ -305,7 +378,7 @@ class Expts_manager(object):
             metadata = self._read_ryaml(metadata_path)  # load metadata of each perturbation
             self._update_metadata_description(metadata,restartpath)  # update `description`
             self._remove_metadata_comments("description", metadata)  # remove None comments from `description`
-            keywords = self._extract_metadata_keywords(self.param_dict_change_list[i])  # extract parameters from the change list
+            keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
             metadata["keywords"] = f"{self.base_dir_name}, {BRANCH_PERTURB}, {keywords}"  # update `keywords`
             self._remove_metadata_comments("keywords", metadata)  # remove None comments from `keywords`
             self._write_ryaml(metadata_path, metadata)  # write to file
@@ -323,7 +396,7 @@ class Expts_manager(object):
                 self._restore_swp_files(exptrepo,staged_files)  # restore *.swp files in case users open any files during case is are running
                 if staged_files:  # commit changes for each expt run
                     exptrepo.index.add(staged_files)
-                    commit_message = f"Experiment setup: Clone from the control experiment: {self.base_path};\nCommitted files/directories are: {', '.join(f'{i}' for i in staged_files)}\n"
+                    commit_message = f"Experiment setup: Clone from the control experiment: {self.base_path};\nCommitted files/directories are: {', '.join(f'{j}' for j in staged_files)}\n"
                     exptrepo.index.commit(commit_message)
                     print(f"files have been committed: {staged_files}\n")
 
@@ -337,7 +410,7 @@ class Expts_manager(object):
                 else:
                     print(f"-- `{expt_name}` has already completed {doneruns} runs! Hence stop running!\n")
                     
-        self.expt_names = None  # reset to None after the loop
+        self.expt_names = None  # reset to None after the loop to update user-defined perturbation experiment names!
         
     def _clean_workspace(self,dir_path):
         work_dir = os.path.join(dir_path,'work')
