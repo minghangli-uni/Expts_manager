@@ -67,12 +67,13 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
         MOM_list4:
             MINIMUM_DEPTH: [0,0.5]
             MAXIMUM_DEPTH: [6000.0, 7000.0]
+        MOM_expt_dir4: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
 
         MOM_list5_combo:
             DT_THERM:              [900.0]
             DIABATIC_FIRST:        [False]
             THERMO_SPANS_COUPLING: [True]
-        MOM_expt_dir5: ['expt6']
+        MOM_expt_dir5: ['timestep_therm_test']
 # ============ Control experiment and perturbation Runs ===================================
 ctrl_nruns: 0  # Number of control experiment runs
 startfrom: 5  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
