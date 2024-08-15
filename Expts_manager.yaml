@@ -92,5 +92,5 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
 # ============ Control experiment and perturbation Runs ===================================
 ctrl_nruns: 0  # Number of control experiment runs
 startfrom: 5  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
-nruns: 0  # Total number of output directories to generate for each Expts_manager member
+nruns: 5  # Total number of output directories to generate for each Expts_manager member
 
