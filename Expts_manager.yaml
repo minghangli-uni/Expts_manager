@@ -1,0 +1,97 @@
+# ===========================================================
+# YAML Configuration for Expts_manager.py
+# ===========================================================
+# This YAML file contains the necessary parameters and configurations
+# to clone, setup, and run control experiments and perturbation tests
+# using Expts_manager.py. Detailed explanations are provided to ensure
+# clarity and ease of use for prospective users.
+# ===========================================================
+
+
+# ============ Utility Tool =======================
+utils_url: "git@github.com:minghangli-uni/om3-utils.git"  # Git URL for the utility tool repository
+utils_branch_name: "main"  # The branch for which the utility tool will be checked out
+utils_dir_name: "om3-utils"  # Directory name for the utility tool (user-defined)
+
+# ============ Template Setup =======================
+template_url: "git@github.com:COSIMA/MOM6-CICE6.git"  # Git URL for the control experiment 
+#template_commit: 7beab25
+#template_commit: 070493071c807  # Specific commit hash in the template repository to extract configuration from
+template_commit: fb7ccd3
+base_dir_name: C1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined)
+base_branch_name: ctrl  # Branch name for the control experiment (user-defined)
+test_path: "test-payu1.1.4"  # Path for all test runs; include both control and perturbation runs here (user-defined)
+
+# ============ Control Experiment Setup ======================= 
+config_yaml: # Configuration parameters for setting up the control experiment
+    jobname: 1deg_jra55_ryf_ctrl
+    metadata:
+        enable: true 
+    runlog: true
+cpl_dt:  # Coupling timestep in the `nuopc_runseq` 
+nuopc_runconfig:  # NUOPC configuration; accept all entries based on the needs
+    CLOCK_attributes:
+        stop_option: ndays
+        stop_n: 1
+        restart_option: ndays
+        restart_n: 1
+
+# ============ Namelist Tunning ================================ 
+namelists:  # Fine-tuning parameters for the perturbations; define as needed for specific scenarios 
+
+    CICE_input:
+        shortwave_nml_combo:
+            albicei: [ 0.36, 0.39, 0.44, 0.47 ]
+            albicev: [ 0.78, 0.81, 0.86, 0.90 ]
+
+        CICE_expt_dir1: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
+        dynamics_nml_combo:
+             mu_rdg:        [ 2, 3, 4 ]
+             turning_angle: [ 0, 1, 2] # NB: special name: turning angle in degrees used to specify cosw, sinw
+
+        thermo_nml:
+            chio: [ 0.001]
+
+        CICE_expt_dir2: ['short_test', 'test_short']
+        shortwave_nml:
+            albicei: [.3, .44] #[ .3, .44, .5 ]
+
+        dynamics_nml:
+             dragio: [ 0.004, 0.008 ]
+
+# MOM_list`x`: # Parameters specific to the ocean model
+               # Supports multiple `MOM_list` entries, such as, `MOM_list1`, `MOM_list2`, etc.
+               # Each `MOM_list` is a dictionary where each parameter can have one or more values
+               # Each column of values represents a different perturbation experiment
+               # For each perturbation experiment, user can specify a custom directory name (starting with MOM_expt_dir`x`); if the name is not provided, the directory will be named as `parameter1_value1_parmaeter2_value2...`. The format will continue to include all parameters and their corresponding values 
+    MOM_input:
+
+        MOM_expt_dir1: ['expt1','expt2','expt3','expt4']
+        MOM_list1_combo:
+            DT_THERM:              [3600.0, 7200.0, 9000.0, 1800.0]
+            DIABATIC_FIRST:        [False , False, False, True]
+            THERMO_SPANS_COUPLING: [True  , True, True, False]
+
+        MOM_expt_dir2: ['expt5']
+        MOM_list2: 
+            THICKNESSDIFFUSE: False
+
+        MOM_list3:
+            HFREEZE: [12,14]
+
+        MOM_expt_dir10: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
+        MOM_list4:
+            MINIMUM_DEPTH: [0,0.5]
+            MAXIMUM_DEPTH: [6000.0, 7000.0]
+
+        MOM_expt_dir25: ['timestep_therm_test']
+        MOM_list5_combo:
+            DT_THERM:              [900.0]
+            DIABATIC_FIRST:        [False]
+            THERMO_SPANS_COUPLING: [True]
+
+# ============ Control experiment and perturbation Runs ===================================
+ctrl_nruns: 10  # Number of control experiment runs
+startfrom: 0  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
+nruns: 0  # Total number of output directories to generate for each Expts_manager member
+

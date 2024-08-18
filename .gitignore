@@ -1,4 +1,3 @@
-*.yaml
 .git
 .vscode
 __pycache__/
