@@ -7,7 +7,14 @@ Author: Minghang Li
 Apache 2.0 License http://www.apache.org/licenses/LICENSE-2.0.txt
 """
 # ===========================================================================
-import re,os,sys,copy,subprocess,shutil,glob,argparse
+import os
+import sys
+import re
+import copy
+import subprocess
+import shutil
+import glob
+import argparse
 
 try:
     import numpy as np
@@ -22,8 +29,6 @@ except ImportError:
     print("   module use /g/data/vk83/modules && module load payu/1.1.3\n")
     raise
 
-DIR_MANAGER     = os.getcwd()
-BRANCH_PERTURB  = "perturb"
 # ===========================================================================
 
 def update_MOM6_params_override(param_dict_change, commt_dict_change):
@@ -33,8 +38,15 @@ def update_MOM6_params_override(param_dict_change, commt_dict_change):
     return override_param_dict_change, override_commt_dict_change
 
 class Expts_manager(object):
-    def __init__(self, dir_manager=DIR_MANAGER, MOM_prefix = "MOM_list", combo_suffix = "_combo", nml_suffix = "_nml"):
-        self.dir_manager = dir_manager
+    DIR_MANAGER     = os.getcwd()
+    BRANCH_PERTURB  = "perturb"
+
+    def __init__(self, MOM_prefix: str = "MOM_list", combo_suffix: str = "_combo", nml_suffix: str = "_nml"):
+        self.branch_perturb = self.BRANCH_PERTURB
+        self.dir_manager = self.DIR_MANAGER
+        self.MOM_prefix = MOM_prefix
+        self.combo_suffix = combo_suffix
+        self.nml_suffix = nml_suffix
         self.template_path = None
         self.startfrom = None
         self.indata = None
@@ -49,9 +61,7 @@ class Expts_manager(object):
         self.param_dict_change_list = []
         self.commt_dict_change = {}
         self.append_group_list = []
-        self.MOM_prefix = MOM_prefix
-        self.combo_suffix = combo_suffix
-        self.nml_suffix = nml_suffix
+
         self.previous_key = None
         
     def load_variables(self,yamlfile):
@@ -98,9 +108,6 @@ class Expts_manager(object):
 
         # create the path for the control experiment
         self.base_path = os.path.join(self.test_path,self.base_dir_name)
-
-        # load ice_in of the control experiment
-        self.ice_in_ctrl = f90nml.read(os.path.join(self.base_path,"ice_in"))
         
         # Clone the control repo from a designated repo defined in `Expts_manager.yaml` and create a new branch
         if os.path.exists(self.base_path):
@@ -116,6 +123,9 @@ class Expts_manager(object):
 
         # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
         self._update_config_files()
+
+        # load ice_in of the control experiment
+        self.ice_in_ctrl = f90nml.read(os.path.join(self.base_path,"ice_in"))
 
         # Payu setup && sweep to ensure the changes correctly && remove the `work` directory for the control run
         command = f"cd {self.base_path} && payu setup && payu sweep"
@@ -310,7 +320,7 @@ class Expts_manager(object):
                     pass
                     
                 print(f"Directory {expt_path} not exists, hence cloning template!")
-                command = f"payu clone -B {self.base_branch_name} -b {BRANCH_PERTURB} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
+                command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
                 subprocess.run(command, shell=True, check=True)
 
             # Update `MOM_override` or/and `ice_in`
@@ -356,7 +366,7 @@ class Expts_manager(object):
             self._update_metadata_description(metadata,restartpath)  # update `description`
             self._remove_metadata_comments("description", metadata)  # remove None comments from `description`
             keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
-            metadata["keywords"] = f"{self.base_dir_name}, {BRANCH_PERTURB}, {keywords}"  # update `keywords`
+            metadata["keywords"] = f"{self.base_dir_name}, {self.branch_perturb}, {keywords}"  # update `keywords`
             self._remove_metadata_comments("keywords", metadata)  # remove None comments from `keywords`
             self._write_ryaml(metadata_path, metadata)  # write to file
 
@@ -511,7 +521,7 @@ class Expts_manager(object):
         args = parser.parse_args()
         INPUT_YAML = vars(args)["INPUT_YAML"]
 
-        yamlfile     = os.path.join(DIR_MANAGER,INPUT_YAML)
+        yamlfile     = os.path.join(self.dir_manager,INPUT_YAML)
         self.load_variables(yamlfile)
         self.load_tools()
         self.setup_ctrl_expt()

@@ -16,10 +16,11 @@ utils_dir_name: "om3-utils"  # Directory name for the utility tool (user-defined
 # ============ Template Setup =======================
 template_url: "git@github.com:COSIMA/MOM6-CICE6.git"  # Git URL for the control experiment 
 #template_commit: 7beab25
-template_commit: 070493071c807  # Specific commit hash in the template repository to extract configuration from 
-base_dir_name: 1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined) 
+#template_commit: 070493071c807  # Specific commit hash in the template repository to extract configuration from
+template_commit: fb7ccd3
+base_dir_name: C1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined)
 base_branch_name: ctrl  # Branch name for the control experiment (user-defined)
-test_path: ./test_tracer-timestep  # Path for all test runs; include both control and perturbation runs here (user-defined)
+test_path: "test-payu1.1.4"  # Path for all test runs; include both control and perturbation runs here (user-defined)
 
 # ============ Control Experiment Setup ======================= 
 config_yaml: # Configuration parameters for setting up the control experiment
@@ -90,7 +91,7 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
             THERMO_SPANS_COUPLING: [True]
 
 # ============ Control experiment and perturbation Runs ===================================
-ctrl_nruns: 0  # Number of control experiment runs
-startfrom: 5  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
-nruns: 5  # Total number of output directories to generate for each Expts_manager member
+ctrl_nruns: 10  # Number of control experiment runs
+startfrom: 0  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
+nruns: 0  # Total number of output directories to generate for each Expts_manager member
 
