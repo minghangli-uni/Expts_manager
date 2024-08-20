@@ -109,45 +109,45 @@ class Expts_manager(object):
         # create the path for the control experiment
         self.base_path = os.path.join(self.test_path,self.base_dir_name)
         
-        # Clone the control repo from a designated repo defined in `Expts_manager.yaml` and create a new branch
-        if os.path.exists(self.base_path):
-            print(f"Base path is already created located at {self.base_path}")
-        else:
-            print(f"Cloning template from {self.template_url} to {self.base_path}")
-            command = f"payu clone {self.template_url} {self.base_path}"
-            subprocess.run(command, shell=True, check=False)
-            templaterepo = git.Repo(self.base_path)
-            print(f"Checkout commit {self.template_commit} - corresponding to repo's branch: {templaterepo.active_branch.name};")
-            print(f"and create a new branch {self.base_branch_name} for the control experiment!")
-            templaterepo.git.checkout('-b', self.base_branch_name, self.template_commit)  # checkout the new branch from the specific template commit
-
-        # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
-        self._update_config_files()
-
-        # load ice_in of the control experiment
-        self.ice_in_ctrl = f90nml.read(os.path.join(self.base_path,"ice_in"))
-
-        # Payu setup && sweep to ensure the changes correctly && remove the `work` directory for the control run
-        command = f"cd {self.base_path} && payu setup && payu sweep"
-        subprocess.run(command, shell=True, check=False)
-        
-        # check file changes and commits if so, otherwise, no commits for the ctrl run.
-        doneruns = len(glob.glob(os.path.join(self.base_path,"archive","output[0-9][0-9][0-9]*")))
-        if doneruns == 0:
-            repo = git.Repo(self.base_path)
-            print(f"Current base branch is: {repo.active_branch.name}")
-            untracked_files = self._get_untracked_files(repo)
-            changed_files = self._get_changed_files(repo)
-            staged_files = set(untracked_files+changed_files)
-            commit_message = f"Control experiment setup: Configure `{self.base_branch_name}` branch by `{self.yamlfile}`\nin preparation for expt runs!"
-            if staged_files:
-                repo.index.add(staged_files)
-                repo.index.commit(commit_message)
-            else:
-                print(f"Nothing changed, hence no further commits to the {self.base_path} repo!")
-
         # run the control experiment
         if self.ctrl_nruns > 0:
+            # Clone the control repo from a designated repo defined in `Expts_manager.yaml` and create a new branch
+            if os.path.exists(self.base_path):
+                print(f"Base path is already created located at {self.base_path}")
+            else:
+                print(f"Cloning template from {self.template_url} to {self.base_path}")
+                command = f"payu clone {self.template_url} {self.base_path}"
+                subprocess.run(command, shell=True, check=False)
+                templaterepo = git.Repo(self.base_path)
+                print(f"Checkout commit {self.template_commit} - corresponding to repo's branch: {templaterepo.active_branch.name};")
+                print(f"and create a new branch {self.base_branch_name} for the control experiment!")
+                templaterepo.git.checkout('-b', self.base_branch_name, self.template_commit)  # checkout the new branch from the specific template commit
+    
+            # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
+            self._update_config_files()
+    
+            # load ice_in of the control experiment
+            self.ice_in_ctrl = f90nml.read(os.path.join(self.base_path,"ice_in"))
+    
+            # Payu setup && sweep to ensure the changes correctly && remove the `work` directory for the control run
+            command = f"cd {self.base_path} && payu setup && payu sweep"
+            subprocess.run(command, shell=True, check=False)
+            
+            # check file changes and commits if so, otherwise, no commits for the ctrl run.
+            doneruns = len(glob.glob(os.path.join(self.base_path,"archive","output[0-9][0-9][0-9]*")))
+            if doneruns == 0:
+                repo = git.Repo(self.base_path)
+                print(f"Current base branch is: {repo.active_branch.name}")
+                untracked_files = self._get_untracked_files(repo)
+                changed_files = self._get_changed_files(repo)
+                staged_files = set(untracked_files+changed_files)
+                commit_message = f"Control experiment setup: Configure `{self.base_branch_name}` branch by `{self.yamlfile}`\nin preparation for expt runs!"
+                if staged_files:
+                    repo.index.add(staged_files)
+                    repo.index.commit(commit_message)
+                else:
+                    print(f"Nothing changed, hence no further commits to the {self.base_path} repo!")
+    
             print(f"\nRun control experiment -n {self.ctrl_nruns}\n")
             command = f"cd {self.base_path} && payu run -f -n {self.ctrl_nruns}"
             subprocess.run(command, check=False, shell=True)
@@ -363,6 +363,8 @@ class Expts_manager(object):
             # Update metadata.yaml
             metadata_path = os.path.join(expt_path, "metadata.yaml")  # metadata path for each perturbation
             metadata = self._read_ryaml(metadata_path)  # load metadata of each perturbation
+            if self.startfrom_str == 'rest':
+                restartpath = 'rest'
             self._update_metadata_description(metadata,restartpath)  # update `description`
             self._remove_metadata_comments("description", metadata)  # remove None comments from `description`
             keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
@@ -377,12 +379,15 @@ class Expts_manager(object):
             doneruns = len(glob.glob(os.path.join(expt_path,"archive","output[0-9][0-9][0-9]*")))    
             if doneruns == 0:
                 exptrepo = git.Repo(expt_path)
+                deleted_files = self._get_deleted_files(exptrepo)
+                if deleted_files:
+                    exptrepo.index.remove(deleted_files,r=True)  # remove deleted files or `work` directory
                 untracked_files = self._get_untracked_files(exptrepo)
                 changed_files = self._get_changed_files(exptrepo)
                 staged_files = set(untracked_files+changed_files)
                 self._restore_swp_files(exptrepo,staged_files)  # restore *.swp files in case users open any files during case is are running
                 if staged_files:  # commit changes for each expt run
-                    exptrepo.index.add(staged_files)
+                    exptrepo.index.add(list(staged_files))
                     commit_message = f"Experiment setup: Clone from the control experiment: {self.base_path};\nCommitted files/directories are: {', '.join(f'{j}' for j in staged_files)}\n"
                     exptrepo.index.commit(commit_message)
                     print(f"files have been committed: {staged_files}\n")
