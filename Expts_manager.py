@@ -15,7 +15,7 @@ import subprocess
 import shutil
 import glob
 import argparse
-
+import warnings
 try:
     import numpy as np
     import git
@@ -230,8 +230,8 @@ class Expts_manager(object):
                             self.manage_expts()
                         self.previous_key = k_sub
         else:
-            raise ValueError("namelists can't be None for paramater-tunning tests!")
-
+#            raise ValueError("namelists can't be None for paramater-tunning tests!")
+             warnings.warn("NO namelists provided, hence there are no parameter-tunning tests!")             
     def _generate_individual_dicts(self,name_dict,commt_dict,k_sub):
         """Each dictionary has a single key-value pair."""
         param_dict_change_list = []
