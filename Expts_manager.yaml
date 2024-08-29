@@ -14,50 +14,119 @@ utils_branch_name: "main"  # The branch for which the utility tool will be check
 utils_dir_name: "om3-utils"  # Directory name for the utility tool (user-defined)
 
 # ============ Template Setup =======================
-template_url: "git@github.com:COSIMA/MOM6-CICE6.git"  # Git URL for the control experiment 
-#template_commit: 7beab25
-#template_commit: 070493071c807  # Specific commit hash in the template repository to extract configuration from
-template_commit: fb7ccd3
-base_dir_name: C1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined)
+template_url: "git@github.com:minghangli-uni/MOM6-CICE6.git"  # Git URL for the control experiment 
+template_commit: db4e976 # Specific commit hash in the template repository to extract configuration from
+base_dir_name: Ctrl-1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined)
 base_branch_name: ctrl  # Branch name for the control experiment (user-defined)
-test_path: "test-payu1.1.4"  # Path for all test runs; include both control and perturbation runs here (user-defined)
+#test_path: "30_tracer_ts"  # Path for all test runs; include both control and perturbation runs here (user-defined)
+test_path: "product1"
+
+# ============ diagnostic table =======================
+diag_url: "git@github.com:minghangli-uni/make_diag_table.git"
+diag_commit: ca83cbb
+diag_branch_name: "general_scheme1"
+diag_dir_name: "make_diag_table"
+diag_ctrl: False
+diag_pert: True
 
 # ============ Control Experiment Setup ======================= 
 config_yaml: # Configuration parameters for setting up the control experiment
-    jobname: 1deg_jra55_ryf_ctrl
+    ncpus: 240
+    mem: 960GB
+    walltime: 24:00:00
+    jobname: base-1deg_jra55_ryf_ctrl
     metadata:
         enable: true 
     runlog: true
 cpl_dt:  # Coupling timestep in the `nuopc_runseq` 
 nuopc_runconfig:  # NUOPC configuration; accept all entries based on the needs
     CLOCK_attributes:
-        stop_option: ndays
-        stop_n: 1
-        restart_option: ndays
-        restart_n: 1
+        stop_option: nyears
+        stop_n: 5
+        restart_option: nyears
+        restart_n: 5
+    PELAYOUT_attributes:
+        atm_ntasks: 24
+        cpl_ntasks: 24
+        glc_ntasks: 1
+        ice_ntasks: 24
+        lnd_ntasks: 1
+        ocn_ntasks: 216
+        ocn_rootpe: 24
+        rof_ntasks: 24
+        wav_ntasks: 1
+ice_in:
+    domain_nml:
+        max_blocks: 15
+        block_size_x: 15
+        block_size_y: 20
+#    thermo_nml:
+#        dsdt_slow_mode: -5e-08
+#    dynamics_nml:
+#        turning_angle: 0
+#        mu_rdg: 2
+input.nml:
+    diag_manager_nml:
+        max_axes: 400
+        max_files: 200
+        max_num_axis_sets: 200
+
+#MOM_input:
+#    HFREEZE: 12
+#    BOUND_SALINITY: False
+
+
+# ============ Perturbation Experiment Setup [Optional] =======================
+# Currently only nuopc_runconfig file with the key of `perturb_run_config` is modifiable
+perturb_run_config:
+    CLOCK_attributes:
+        stop_option: nyears
+        stop_n: 5
+        restart_option: nyears
+        restart_n: 5
 
 # ============ Namelist Tunning ================================ 
 namelists:  # Fine-tuning parameters for the perturbations; define as needed for specific scenarios 
+#    ice_in:
+#        shortwave_nml_combo:
+#            albicei: [ 0.36, 0.39, 0.44, 0.47 ]
+#            albicev: [ 0.78, 0.81, 0.86, 0.90 ]
 
-    CICE_input:
-        shortwave_nml_combo:
-            albicei: [ 0.36, 0.39, 0.44, 0.47 ]
-            albicev: [ 0.78, 0.81, 0.86, 0.90 ]
+#        ice_in_dir1: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
+#        dynamics_nml_combo:
+#            mu_rdg:        [ 2, 3, 4 ]
+#            turning_angle: [ 0, 1, 2]
 
-        CICE_expt_dir1: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
-        dynamics_nml_combo:
-             mu_rdg:        [ 2, 3, 4 ]
-             turning_angle: [ 0, 1, 2] # NB: special name: turning angle in degrees used to specify cosw, sinw
+#        thermo_nml:
+#            chio: [ 0.001]
 
-        thermo_nml:
-            chio: [ 0.001]
+#    input.nml:
+#        diag_manager_nml_combo:
+#            max_axes: [450]
+#            max_files: [250]
+#            max_num_axis_sets: [250]
+#    drv_in:
+#        debug_inparm_nml:
+#            create_esmf_pet_files: ['.true.'] 
+#    CICE_input:
+#        shortwave_nml_combo:
+#            albicei: [ 0.36, 0.39, 0.44, 0.47 ]
+#            albicev: [ 0.78, 0.81, 0.86, 0.90 ]
 
-        CICE_expt_dir2: ['short_test', 'test_short']
-        shortwave_nml:
-            albicei: [.3, .44] #[ .3, .44, .5 ]
+#        CICE_expt_dir1: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
+#        dynamics_nml_combo:
+#             mu_rdg:        [ 2, 3, 4 ]
+#             turning_angle: [ 0, 1, 2] # NB: special name: turning angle in degrees used to specify cosw, sinw
 
-        dynamics_nml:
-             dragio: [ 0.004, 0.008 ]
+#        thermo_nml:
+#            chio: [ 0.001]
+
+#        CICE_expt_dir2: ['short_test', 'test_short']
+#        shortwave_nml:
+#            albicei: [.3, .44] #[ .3, .44, .5 ]
+
+#        dynamics_nml:
+#             dragio: [ 0.004, 0.008 ]
 
 # MOM_list`x`: # Parameters specific to the ocean model
                # Supports multiple `MOM_list` entries, such as, `MOM_list1`, `MOM_list2`, etc.
@@ -66,32 +135,34 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
                # For each perturbation experiment, user can specify a custom directory name (starting with MOM_expt_dir`x`); if the name is not provided, the directory will be named as `parameter1_value1_parmaeter2_value2...`. The format will continue to include all parameters and their corresponding values 
     MOM_input:
 
-        MOM_expt_dir1: ['expt1','expt2','expt3','expt4']
+        MOM_expt_dir1:             ['lexpt0','lexpt1'  ,'lexpt2'  ,'lexpt3' ,'lexpt4' ,'lexpt5' , 'lexpt6', 'lexpt7', 'lexpt8', 'lexpt9' , 'lexpt10', 'lexpt11', 'lexpt12', 'lexpt13', 'lexpt14']
         MOM_list1_combo:
-            DT_THERM:              [3600.0, 7200.0, 9000.0, 1800.0]
-            DIABATIC_FIRST:        [False , False, False, True]
-            THERMO_SPANS_COUPLING: [True  , True, True, False]
+            DT_THERM:              [3600.0 ,108000.0 , 108000.0, 90000.0, 90000.0, 72000.0, 72000.0, 54000.0, 54000.0, 36000.0 , 36000.0 , 18000.0 , 18000.0 , 7200.0  , 7200.0  ]
+            DIABATIC_FIRST:        [True   , False   , False   , False  , False  , False  , False  , False  , False  , False   , False   , False   , False   , False   , False   ]
+            THERMO_SPANS_COUPLING: [False  , True    , True    , True   , True   , True   , True   , True   , True   , True    , True    , True    , True    , True    , True    ]
+            DTBT_RESET_PERIOD:     [0.0    , 108000.0, 0.0     , 90000.0, 0.0    , 72000.0, 0.0    , 54000.0, 0.0    , 36000.0 , 0.0     , 18000.0 , 0.0     , 7200.0  , 0.0     ]
 
-        MOM_expt_dir2: ['expt5']
-        MOM_list2: 
-            THICKNESSDIFFUSE: False
+        #MOM_expt_dir2: ['expt5']
+        #MOM_list2: 
+        #    THICKNESSDIFFUSE: False
 
-        MOM_list3:
-            HFREEZE: [12,14]
+        #MOM_list3:
+        #    HFREEZE: [12,14]
 
-        MOM_expt_dir10: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
-        MOM_list4:
-            MINIMUM_DEPTH: [0,0.5]
-            MAXIMUM_DEPTH: [6000.0, 7000.0]
+        #MOM_expt_dir10: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
+        #MOM_list4:
+        #    MINIMUM_DEPTH: [0,0.5]
+        #    MAXIMUM_DEPTH: [6000.0, 7000.0]
 
-        MOM_expt_dir25: ['timestep_therm_test']
-        MOM_list5_combo:
-            DT_THERM:              [900.0]
-            DIABATIC_FIRST:        [False]
-            THERMO_SPANS_COUPLING: [True]
+        #MOM_expt_dir25: ['timestep_therm_test']
+        #MOM_list5_combo:
+        #    DT_THERM:              [900.0]
+        #    DIABATIC_FIRST:        [False]
+        #    THERMO_SPANS_COUPLING: [True]
 
 # ============ Control experiment and perturbation Runs ===================================
 ctrl_nruns: 10  # Number of control experiment runs
-startfrom: 0  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
-nruns: 0  # Total number of output directories to generate for each Expts_manager member
+run_namelists: False 
+startfrom: 2  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
+nruns: 2  # Total number of output directories to generate for each Expts_manager member
 
