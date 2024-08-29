@@ -102,6 +102,7 @@ class Expts_manager(object):
         self.ctrl_nruns = self.indata.get("ctrl_nruns",0)
         self.nruns = self.indata.get("nruns",0)
         self.run_namelists = self.indata.get("run_namelists",False)
+        self.force_restart = self.indata.get("force_restart",False)
         self.diag_url = self.indata.get("diag_url",None)
         self.diag_dir_name = self.indata.get("diag_dir_name",None)
         self.diag_branch_name = self.indata.get("diag_branch_name",None)
@@ -448,10 +449,13 @@ class Expts_manager(object):
 
             if self.startfrom_str != 'rest':  # symlink restart directories
                 link_restart = os.path.join('archive','restart'+self.startfrom_str)  # 
-                restartpath = os.path.realpath(os.path.join(self.base_path,link_restart))  # restart directory from control experiment
-                dest = os.path.join(expt_path, link_restart)  # restart directory symlink for each perturbation experiment
-                if not os.path.islink(dest):  # if symlink exists, skip creating the symlink
-                    os.symlink(restartpath, dest)  # done the symlink if does not exist
+                restartpath = os.path.realpath(os.path.join(self.base_path,link_restart))  # restart dir from control experiment
+                dest = os.path.join(expt_path, link_restart)  # restart dir symlink for each perturbation experiment
+                # only create symlink if it doesnt exist or force_restart is enabled
+                if not os.path.islink(dest) or self.force_restart or (os.path.islink(dest) and not os.path.exists(os.readlink(dest))):
+                    if os.path.exists(dest) or os.path.islink(dest):
+                        os.remove(dest)  # remove symlink
+                    os.symlink(restartpath, dest)  # create symlink
 
             
             # optionally update nuopc_config for perturbation runs
@@ -483,7 +487,7 @@ class Expts_manager(object):
             if self.nruns > 0:
                 newruns = self.nruns - doneruns
                 if newruns > 0:
-                    command = f"cd {expt_path} && payu run -n {newruns}"
+                    command = f"cd {expt_path} && payu run -n {newruns} -f"
                     subprocess.run(command, check=False, shell=True)
                     print('\n')
                 else:
