@@ -29,7 +29,7 @@ try:
 except ImportError:
     print("\nFatal error: modules not available.")
     print("On NCI, do the following and try again:")
-    print("   module use /g/data/vk83/modules && module load payu/1.1.3\n")
+    print("   module use /g/data/vk83/modules && module load payu/1.1.5\n")
     raise
 
 # ===========================================================================
