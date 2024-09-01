@@ -55,7 +55,7 @@ class Expts_manager(object):
         combo_suffix (str): Suffix for combo experiments, i.e., multiple-parameter test
         branch_perturb (str): user-defined branch name for the perturbation
     """
-    
+
     DIR_MANAGER     = os.getcwd()
 
     def __init__(self, MOM_prefix: str="MOM_list",combo_suffix: str="_combo",branch_perturb: str="perturb"):
@@ -64,7 +64,7 @@ class Expts_manager(object):
         self.branch_perturb = branch_perturb
         self.combo_suffix = combo_suffix
         self.MOM_prefix = MOM_prefix
-        
+    
     def load_variables(self,yamlfile):
         """ 
         Load variables from the input yaml file 
@@ -141,7 +141,7 @@ class Expts_manager(object):
                 print(f"Cloning {tool_name} for use!")
             else:
                 print(f"{path} already exists!")
-                
+        
         # om3-utils is a must
         utils_path = os.path.join(self.dir_manager, self.utils_dir_name)
         clone_repo(self.utils_branch_name, self.utils_url, utils_path, self.utils_dir_name)
@@ -165,7 +165,7 @@ class Expts_manager(object):
         else:
             os.makedirs(self.test_path)
             print(f"test directory {self.test_path} is created!")
-            
+         
     def manage_ctrl_expt(self):
         """
         Setup and run the control experiment
@@ -253,6 +253,7 @@ class Expts_manager(object):
         namelists = self.indata["namelists"]
         if namelists is not None:
             for k,nmls in namelists.items():
+                
                 if k.endswith('_in') or k.endswith('.nml'):
                     self.tag_model = 'nml'
                     if k.endswith('_in'):
@@ -325,6 +326,31 @@ class Expts_manager(object):
                                     self._generate_individual_dicts(name_dict,commt_dict,k_sub)
                                 self.manage_expts(k)
                             self.previous_key = k_sub
+                            
+                if k == "nuopc.runseq":
+                    k_tmp_dir = k[:5]
+                    self.tag_model = 'cpl_dt'
+                    if nmls is not None:
+                        for k_sub in nmls:
+                            if k_sub.startswith('nuopc_list'):
+                                name_dict = nmls[k_sub]
+                                self.num_expts = 0
+                                for v_s in name_dict.values():
+                                    if isinstance(v_s,list):
+                                        self.num_expts += len(v_s)
+                                    elif isinstance(v_s,bool):
+                                        self.num_expts = 1
+                                if self.previous_key is not None and self.previous_key.startswith(k_tmp_dir):  # user-defined directory name, starting with k_tmp_dir, can be None
+                                    self.expt_names = nmls[self.previous_key]
+                                    if self.expt_names is not None:
+                                        if len(self.expt_names) != self.num_expts:
+                                            raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
+                                                             f"is different from that of tunning parameters {name_dict}!"
+                                                             f"\nPlease double check the number or leave it blank!")
+                                commt_dict = None  # only valids for MOM_input, hence here is fixed to `None`
+                                self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+                                self.manage_expts(k)
+                            self.previous_key = k_sub
         else:
              warnings.warn("NO namelists provided, hence there are no parameter-tunning tests!")
 
@@ -367,10 +393,13 @@ class Expts_manager(object):
     def manage_expts(self,namelist_name):
         """ setup expts, and run expts"""
         for i in range(len(self.param_dict_change_list)):
+            
             # for each experiment
             param_dict = self.param_dict_change_list[i]
+            print(param_dict)
             if self.tag_model == 'nml':
                 cice_group = self.append_group_list[i]
+                
             if self.expt_names is None:
                 expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])  # if `expt_names` does not exist, expt_name is set as the tunning parameters appending with associated values
             else:
@@ -416,7 +445,7 @@ class Expts_manager(object):
                 if self.tag_model == 'mom6': # might need MOM_parameter.all, because many parameters are in-default hence not shown up in `MOM_input` 
                     #TODO
                     pass
-
+                    
                 print(f"Directory {expt_path} not exists, hence cloning template!")
                 command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
                 subprocess.run(command, shell=True, check=True)
@@ -427,8 +456,9 @@ class Expts_manager(object):
                 MOM6_or_parser = self._parser_mom6_input(os.path.join(expt_path, "MOM_override"))  # parse MOM_override
                 MOM6_or_parser.param_dict, MOM6_or_parser.commt_dict = update_MOM6_params_override(param_dict,self.commt_dict_change)  # update the tunning parameters, values and associated comments
                 MOM6_or_parser.writefile_MOM_input(os.path.join(expt_path, "MOM_override"))  # write to file
+
             elif self.tag_model == 'nml':
-                # do changes
+                # apply changes
                 cice_path = os.path.join(expt_path,namelist_name)
                 if cice_group.endswith(self.combo_suffix):  # rename the namlist by removing the suffix if the suffix with `_combo`
                     cice_group = cice_group[:-len(self.combo_suffix)]
@@ -443,7 +473,12 @@ class Expts_manager(object):
                         patch_dict[cice_group][cice_name] = cice_value
                 f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
                 os.rename(cice_path+'_tmp',cice_path)
-
+            elif self.tag_model == 'cpl_dt':
+                # apply changes
+                nuopc_runseq_file = os.path.join(expt_path,"nuopc.runseq")
+                print(nuopc_runseq_file)
+                self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,param_dict[next(iter(param_dict.keys()))])
+                
             if self.diag_pert:
                 self._copy_diag_table(expt_path)
 
@@ -543,7 +578,7 @@ class Expts_manager(object):
         if cpl_dt_input is not None:
             nuopc_runseq_file = os.path.join(path,"nuopc.runseq")
             self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,cpl_dt_input)
-
+    
     def _update_config_entries(self,base,change):
         """ recursively update nuopc_runconfig and config.yaml entries """
         for k,v in change.items():

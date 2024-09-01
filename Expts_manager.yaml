@@ -135,12 +135,12 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
                # For each perturbation experiment, user can specify a custom directory name (starting with MOM_expt_dir`x`); if the name is not provided, the directory will be named as `parameter1_value1_parmaeter2_value2...`. The format will continue to include all parameters and their corresponding values 
     MOM_input:
 
-        MOM_expt_dir1:             ['lexpt0','lexpt1'  ,'lexpt2'  ,'lexpt3' ,'lexpt4' ,'lexpt5' , 'lexpt6', 'lexpt7', 'lexpt8', 'lexpt9' , 'lexpt10', 'lexpt11', 'lexpt12', 'lexpt13', 'lexpt14']
-        MOM_list1_combo:
-            DT_THERM:              [3600.0 ,108000.0 , 108000.0, 90000.0, 90000.0, 72000.0, 72000.0, 54000.0, 54000.0, 36000.0 , 36000.0 , 18000.0 , 18000.0 , 7200.0  , 7200.0  ]
-            DIABATIC_FIRST:        [True   , False   , False   , False  , False  , False  , False  , False  , False  , False   , False   , False   , False   , False   , False   ]
-            THERMO_SPANS_COUPLING: [False  , True    , True    , True   , True   , True   , True   , True   , True   , True    , True    , True    , True    , True    , True    ]
-            DTBT_RESET_PERIOD:     [0.0    , 108000.0, 0.0     , 90000.0, 0.0    , 72000.0, 0.0    , 54000.0, 0.0    , 36000.0 , 0.0     , 18000.0 , 0.0     , 7200.0  , 0.0     ]
+#        MOM_expt_dir1:             ['lexpt0','lexpt1'  ,'lexpt2'  ,'lexpt3' ,'lexpt4' ,'lexpt5' , 'lexpt6', 'lexpt7', 'lexpt8', 'lexpt9' , 'lexpt10', 'lexpt11', 'lexpt12', 'lexpt13', 'lexpt14']
+#        MOM_list1_combo:
+#            DT_THERM:              [3600.0 ,108000.0 , 108000.0, 90000.0, 90000.0, 72000.0, 72000.0, 54000.0, 54000.0, 36000.0 , 36000.0 , 18000.0 , 18000.0 , 7200.0  , 7200.0  ]
+#            DIABATIC_FIRST:        [True   , False   , False   , False  , False  , False  , False  , False  , False  , False   , False   , False   , False   , False   , False   ]
+#            THERMO_SPANS_COUPLING: [False  , True    , True    , True   , True   , True   , True   , True   , True   , True    , True    , True    , True    , True    , True    ]
+#            DTBT_RESET_PERIOD:     [0.0    , 108000.0, 0.0     , 90000.0, 0.0    , 72000.0, 0.0    , 54000.0, 0.0    , 36000.0 , 0.0     , 18000.0 , 0.0     , 7200.0  , 0.0     ]
 
         #MOM_expt_dir2: ['expt5']
         #MOM_list2: 
@@ -159,10 +159,13 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
         #    DT_THERM:              [900.0]
         #    DIABATIC_FIRST:        [False]
         #    THERMO_SPANS_COUPLING: [True]
-
+    nuopc.runseq:
+        nuopc_expt_dir1: ['cpl_dt1', 'cpl_dt2']
+        nuopc_list1:
+            cpl_dt: [1800.0, 3600.0]
 # ============ Control experiment and perturbation Runs ===================================
-ctrl_nruns: 10  # Number of control experiment runs
-run_namelists: False 
+ctrl_nruns: 0  # Number of control experiment runs
+run_namelists: True 
 force_restart: False
 startfrom: 2  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
 nruns: 2  # Total number of output directories to generate for each Expts_manager member
