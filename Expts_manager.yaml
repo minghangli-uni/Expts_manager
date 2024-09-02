@@ -93,10 +93,10 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
             albicei: [ 0.36, 0.39, 0.47 ]
             albicev: [ 0.78, 0.81, 0.90 ]
 
-        ice_in_dir0: ['icet1', 'icet2', 'icet3', 'icet4']
+        ice_in_dir0: ['ahmax0.1', 'icet1', 'icet2', 'r_snw0.0', 'icet3', 'icet4']
         shortwave_nml:
-            ahmax: [ 0.2, 0.3]
-            r_snw: [ 0.1, 0.2]
+            ahmax: [0.1, 0.2, 0.3]
+            r_snw: [0.0, 0.1, 0.2]
         
         ice_in_dir1: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
         dynamics_nml_combo:
@@ -154,6 +154,7 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
 # ============ Control experiment and perturbation Runs ===================================
 ctrl_nruns: 0  # Number of control experiment runs
 run_namelists: True 
+check_skipping: True
 force_restart: False
 startfrom: 'rest'  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
 nruns: 0  # Total number of output directories to generate for each Expts_manager member

@@ -109,6 +109,7 @@ class Expts_manager(object):
         self.ctrl_nruns = self.indata.get("ctrl_nruns",0)
         self.nruns = self.indata.get("nruns",0)
         self.run_namelists = self.indata.get("run_namelists",False)
+        self.check_skipping = self.indata.get("check_skipping",False)
         self.force_restart = self.indata.get("force_restart",False)
         self.diag_url = self.indata.get("diag_url",None)
         self.diag_dir_name = self.indata.get("diag_dir_name",None)
@@ -440,42 +441,9 @@ class Expts_manager(object):
             if os.path.exists(expt_path):
                 print("-- not creating ", expt_path, " - already exists!")
             else:
-                # create perturbation experiment - check if needs skipping!
-                if self.tag_model == 'nml':
-                    if cice_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
-                        cice_group = cice_group[:-len(self.combo_suffix)]
-                    cice_name = param_dict.keys()
-                    if len(cice_name) == 1:  # one param:value pair
-                        cice_value = param_dict[list(cice_name)[0]]
-                    else:  # combination of param:value pairs
-                        cice_value = [param_dict[j] for j in cice_name]
+                if self.check_skipping:
+                    self._check_skipping(param_dict, cice_group, namelist_name, expt_path)
 
-                    if 'turning_angle' in param_dict:
-                        cosw = np.cos(param_dict['turning_angle'] * np.pi / 180.)
-                        sinw = np.sin(param_dict['turning_angle'] * np.pi / 180.)
-
-                    # load nml of the control experiment
-                    self.nml_ctrl = f90nml.read(os.path.join(self.base_path,namelist_name))
-
-                    if all(cn in self.nml_ctrl.get(cice_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
-                        if 'turning_angle' in param_dict:
-                            skip = (self.nml_ctrl[cice_group]['cosw'] == cosw and 
-                                    self.nml_ctrl[cice_group]['sinw'] == sinw and
-                                    all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name if cn not in ['cosw', 'sinw']))
-                        else:
-                            skip = all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name)
-                    else:
-                        print(f"Not all {cice_name} are found in {cice_group}, hence not skipping!")
-                        skip = False
-
-                    if skip:
-                        print('-- not creating', expt_path, '- parameters are identical to the control experiment located at', self.base_path,'\n')
-                        continue
-
-                if self.tag_model == 'mom6': # might need MOM_parameter.all, because many parameters are in-default hence not shown up in `MOM_input` 
-                    #TODO
-                    pass
-                    
                 print(f"Directory {expt_path} not exists, hence cloning template!")
                 command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
                 subprocess.run(command, shell=True, check=True)
@@ -503,13 +471,12 @@ class Expts_manager(object):
                         patch_dict[cice_group][cice_name] = cice_value
                 f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
                 os.rename(cice_path+'_tmp',cice_path)
-                
+
             elif self.tag_model == 'cpl_dt':
                 # apply changes
                 nuopc_runseq_file = os.path.join(expt_path,"nuopc.runseq")
-                print(nuopc_runseq_file)
                 self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,param_dict[next(iter(param_dict.keys()))])
-                
+
             if self.diag_pert:
                 self._copy_diag_table(expt_path)
 
@@ -559,6 +526,43 @@ class Expts_manager(object):
                     print(f"-- `{expt_name}` has already completed {doneruns} runs! Hence stop running!\n")
 
         self.expt_names = None  # reset to None after the loop to update user-defined perturbation experiment names!
+
+    def _check_skipping(self, param_dict, cice_group, namelist_name, expt_path):
+        # create perturbation experiment - check if needs skipping!
+        if self.tag_model == 'nml':
+            if cice_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
+                cice_group = cice_group[:-len(self.combo_suffix)]
+            cice_name = param_dict.keys()
+            if len(cice_name) == 1:  # one param:value pair
+                cice_value = param_dict[list(cice_name)[0]]
+            else:  # combination of param:value pairs
+                cice_value = [param_dict[j] for j in cice_name]
+    
+            if 'turning_angle' in param_dict:
+                cosw = np.cos(param_dict['turning_angle'] * np.pi / 180.)
+                sinw = np.sin(param_dict['turning_angle'] * np.pi / 180.)
+    
+            # load nml of the control experiment
+            self.nml_ctrl = f90nml.read(os.path.join(self.base_path,namelist_name))
+    
+            if all(cn in self.nml_ctrl.get(cice_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
+                if 'turning_angle' in param_dict:
+                    skip = (self.nml_ctrl[cice_group]['cosw'] == cosw and 
+                            self.nml_ctrl[cice_group]['sinw'] == sinw and
+                            all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name if cn not in ['cosw', 'sinw']))
+                else:
+                    skip = all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name)
+            else:
+                print(f"Not all {cice_name} are found in {cice_group}, hence not skipping!")
+                skip = False
+    
+            if skip:
+                print('-- not creating', expt_path, '- parameters are identical to the control experiment located at', self.base_path,'\n')
+                return
+    
+        if self.tag_model == 'mom6': # might need MOM_parameter.all, because many parameters are in-default hence not shown up in `MOM_input` 
+            #TODO
+            pass
 
     def _clean_workspace(self,dir_path):
         work_dir = os.path.join(dir_path,'work')
@@ -705,4 +709,3 @@ class Expts_manager(object):
 if __name__ == "__main__":
     expt_manager = Expts_manager()
     expt_manager.main()
-
