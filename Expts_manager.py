@@ -9,6 +9,7 @@ Latest version: https://github.com/minghangli-uni/Expts_manager
 Author: Minghang Li
 License: Apache 2.0 License http://www.apache.org/licenses/LICENSE-2.0.txt
 """
+
 # ===========================================================================
 import os
 import sys
@@ -55,7 +56,6 @@ class Expts_manager(object):
         combo_suffix (str): Suffix for combo experiments, i.e., multiple-parameter test
         branch_perturb (str): user-defined branch name for the perturbation
     """
-
     DIR_MANAGER     = os.getcwd()
 
     def __init__(self, MOM_prefix: str="MOM_list",combo_suffix: str="_combo",branch_perturb: str="perturb"):
@@ -167,30 +167,40 @@ class Expts_manager(object):
             print(f"test directory {self.test_path} is created!")
          
     def manage_ctrl_expt(self):
-        """
-        Setup and run the control experiment
-        """
+        """ Setup and run the control experiment """
         self.base_path = os.path.join(self.test_path,self.base_dir_name)
-        # run the control experiment
-        if self.ctrl_nruns > 0:
-            doneruns = len(glob.glob(os.path.join(self.base_path,"archive","output[0-9][0-9][0-9]*")))  # check the number of existing output directories
-            newruns = self.ctrl_nruns - doneruns
-            if newruns > 0:
-                if os.path.exists(self.base_path):
-                    print(f"Base path is already created and located at {self.base_path}")
-                else:
-                    self._clone_template_repo()
+        base_path = self.base_path
+        ctrl_nruns = self.ctrl_nruns
+        
+        if os.path.exists(base_path):
+            print(f"Base path is already created and located at {base_path}")
+            if self._count_file_nums() == 4:
+                print("previous commit fails, please try with an updated commit hash for the control experiment!")
+                self._extract_config_via_commit()
                 if self.diag_ctrl:
-                    self._copy_diag_table(self.base_path)
+                    self._copy_diag_table(base_path)
                 self._update_ctrl_expt()
-                
+                self._check_and_commit_changes()
+        else:
+            self._clone_template_repo()
+            self._extract_config_via_commit()
+            if self.diag_ctrl:
+                self._copy_diag_table(base_path)
+            self._update_ctrl_expt()
+            self._check_and_commit_changes()
+
+        # run the control experiment
+        if ctrl_nruns > 0:
+            doneruns = len(glob.glob(os.path.join(base_path,"archive","output[0-9][0-9][0-9]*")))  # check the number of existing output directories
+            newruns = ctrl_nruns - doneruns
+            if newruns > 0:
                 print(f"\nRun control experiment -n {newruns}\n")
-                command = f"cd {self.base_path} && payu run -f -n {newruns}"
+                command = f"cd {base_path} && payu run -f -n {newruns}"
                 subprocess.run(command, check=False, shell=True)
             else:
-                print(f"ctrl_nruns ({self.ctrl_nruns}) equals to the number of existing output directories ({doneruns}), hence no new control experiments will start!\n")
+                print(f"ctrl_nruns ({ctrl_nruns}) equals to the number of existing output directories ({doneruns}), hence no new control experiments will start!\n")
         else:
-            print(f"ctrl_nruns is {self.ctrl_nruns}, hence no new control experiments will start!\n")
+            print(f"ctrl_nruns is {ctrl_nruns}, hence no new control experiments will start!\n")
 
     def _copy_diag_table(self,path):
         if self.diag_path:
@@ -201,15 +211,18 @@ class Expts_manager(object):
             print(f"{self.diag_path} is not defined, hence skip copy diag_table to the control experiment")
 
     def _clone_template_repo(self):
-        """
-        Clone the template repository and set up the ctrl branch.
-        """
+        """ Clone the template repository and set up the ctrl branch. """
         print(f"Cloning template from {self.template_url} to {self.base_path}")
         command = f"payu clone {self.template_url} {self.base_path}"
         subprocess.run(command, shell=True, check=False)
+        
+    def _extract_config_via_commit(self):
         templaterepo = git.Repo(self.base_path)
         print(f"Checking out commit {self.template_commit} and creating new branch {self.base_branch_name}!")
         templaterepo.git.checkout('-b', self.base_branch_name, self.template_commit)  # checkout the new branch from the specific template commit
+
+    def _count_file_nums(self):
+        return len(os.listdir(self.base_path))
 
     def _update_ctrl_expt(self):
         # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
@@ -248,111 +261,121 @@ class Expts_manager(object):
                     param_dict.update(yaml_data)
                     MOM_inputParser.writefile_MOM_input(os.path.join(self.base_path, file_name))  # overwrite to the same `MOM_input`
 
+    def _check_and_commit_changes(self):
+        repo = git.Repo(self.base_path)
+        print(f"Current base branch is: {repo.active_branch.name}")
+        deleted_files = self._get_deleted_files(repo)
+        if deleted_files:
+            repo.index.remove(deleted_files,r=True)  # remove deleted files or `work` directory
+        untracked_files = self._get_untracked_files(repo)
+        changed_files = self._get_changed_files(repo)
+        staged_files = set(untracked_files+changed_files)
+        self._restore_swp_files(repo,staged_files)  # restore *.swp files in case users open any files during case is are running
+        commit_message = f"Control experiment setup: Configure `{self.base_branch_name}` branch by `{self.yamlfile}`\n committed files/directories {staged_files}!"
+        if staged_files:
+            repo.index.add(staged_files)
+            repo.index.commit(commit_message)
+        else:
+            print(f"Nothing changed, hence no further commits to the {self.base_path} repo!")
+
     def setup_perturb_expt(self):
         # Check namelists in `Expts_manager.yaml`
-        namelists = self.indata["namelists"]
-        if namelists is not None:
-            for k,nmls in namelists.items():
-                
-                if k.endswith('_in') or k.endswith('.nml'):
-                    self.tag_model = 'nml'
-                    if k.endswith('_in'):
-                        k_tmp_dir = k[:-3]  # [Optional] user-defined directory name for each test
-                    elif k.endswith('.nml'):
-                        k_tmp_dir = k[:-4]  # [Optional] user-defined directory name for each test
-                    if nmls is not None:
-                        for k_sub in nmls:  # k_sub is the sub_title in the `namlists` of the input yaml file
-                            if k_sub.endswith('_nml') or k_sub.endswith(self.combo_suffix):
-                                name_dict = nmls[k_sub]
-                                if k_sub.endswith(self.combo_suffix):
-                                    if isinstance(next(iter(name_dict.values())), list):
-                                        self.num_expts = len(next(iter(name_dict.values())))
-                                    else:
-                                        self.num_expts = 1
-                                else:
-                                    self.num_expts = 0
-                                    for v_s in name_dict.values():
-                                        if isinstance(v_s,list):
-                                            self.num_expts += len(v_s)
-                                        else:
-                                            self.num_expts = 1
-                                if self.previous_key is not None and self.previous_key.startswith(k_tmp_dir):  # user-defined directory name, starting with k_tmp_dir, can be None
-                                    self.expt_names = nmls[self.previous_key]
-                                    if self.expt_names is not None:
-                                        if len(self.expt_names) != self.num_expts:
-                                            raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
-                                                             f"is different from that of tunning parameters {name_dict}!"
-                                                             f"\nPlease double check the number or leave it blank!")
-                                commt_dict = None  # only valids for MOM_input, hence here is fixed to `None`
-                                if k_sub.endswith(self.combo_suffix):
-                                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
-                                else:
-                                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                                self.manage_expts(k)
-                            self.previous_key = k_sub
+        namelists = self.indata["namelists"]  # main section, top level key that groups different namlists
+        if not namelists:
+            warnings.warn("NO namelists provided, hence there are no parameter-tunning tests!")
+            return
 
-                if k == "MOM_input":
-                    k_tmp_dir = k[:3]
-                    self.tag_model = 'mom6'
-                    if nmls is not None:
-                        for k_sub in nmls:
-                            if k_sub.startswith(self.MOM_prefix):
-                                name_dict = nmls[k_sub]
-                                if k_sub.endswith(self.combo_suffix):
-                                    if isinstance(next(iter(name_dict.values())), list):
-                                        self.num_expts = len(next(iter(name_dict.values())))
-                                    else:
-                                        self.num_expts = 1
-                                else:
-                                    self.num_expts = 0
-                                    for v_s in name_dict.values():
-                                        if isinstance(v_s,list):
-                                            self.num_expts += len(v_s)
-                                        elif isinstance(v_s,bool):
-                                            self.num_expts = 1
-                                if self.previous_key is not None and self.previous_key.startswith(k_tmp_dir):  # user-defined directory name, starting with k_tmp_dir, can be None
-                                    self.expt_names = nmls[self.previous_key]
-                                    if self.expt_names is not None:
-                                        if len(self.expt_names) != self.num_expts:
-                                            raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
-                                                             f"is different from that of tunning parameters {name_dict}!"
-                                                             f"\nPlease double check the number or leave it blank!") 
-                                MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, "MOM_input"))
-                                param_dict = MOM_inputParser.param_dict
-                                commt_dict = MOM_inputParser.commt_dict
-                                if k_sub.endswith(self.combo_suffix):
-                                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
-                                else:
-                                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                                self.manage_expts(k)
-                            self.previous_key = k_sub
-                            
-                if k == "nuopc.runseq":
-                    k_tmp_dir = k[:5]
-                    self.tag_model = 'cpl_dt'
-                    if nmls is not None:
-                        for k_sub in nmls:
-                            if k_sub.startswith('nuopc_list'):
-                                name_dict = nmls[k_sub]
-                                self.num_expts = 0
-                                for v_s in name_dict.values():
-                                    if isinstance(v_s,list):
-                                        self.num_expts += len(v_s)
-                                    elif isinstance(v_s,bool):
-                                        self.num_expts = 1
-                                if self.previous_key is not None and self.previous_key.startswith(k_tmp_dir):  # user-defined directory name, starting with k_tmp_dir, can be None
-                                    self.expt_names = nmls[self.previous_key]
-                                    if self.expt_names is not None:
-                                        if len(self.expt_names) != self.num_expts:
-                                            raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
-                                                             f"is different from that of tunning parameters {name_dict}!"
-                                                             f"\nPlease double check the number or leave it blank!")
-                                commt_dict = None  # only valids for MOM_input, hence here is fixed to `None`
-                                self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                                self.manage_expts(k)
-                            self.previous_key = k_sub
+        for k, nmls in namelists.items():  # k and nmls: specific namelist related to different blocks of parameters
+            if not nmls:
+                continue
+            if k.endswith(('_in', '.nml')):  # parameter blocks, in which contains one or more groups of parameters, e.g., input.nml, ice_in etc.
+                self.tag_model = 'nml'
+                k_tmp_dir = k[:-3] if k.endswith('_in') else k[:-4]  # [Optional] user-defined directory name for each test
+                self._process_nmls(nmls,k_tmp_dir, k)
+                
+            elif k == "MOM_input":  # parameter blocks specific for parameters of `MOM_input`
+                self.tag_model = 'mom6'
+                k_tmp_dir = k  # [Optional] user-defined directory name for each test
+                self._process_MOM_input(nmls, k_tmp_dir, k)
+                
+            elif k == "nuopc.runseq":  # parameter blocks specific for parameters of `MOM_input`
+                self.tag_model = 'cpl_dt'
+                k_tmp_dir = k[-6:]  # [Optional] user-defined directory name for each test
+                self._process_nuopc_runseq(nmls, k_tmp_dir, k)
+
+    def _process_nmls(self, nmls, k_tmp_dir, k):
+        for k_sub in nmls:  # parameter groups, in which contains one or more specific parameters.
+            if k_sub.endswith('_nml') or k_sub.endswith(self.combo_suffix):
+                name_dict = nmls[k_sub]
+                self._cal_num_expts(name_dict, k_sub)
+                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
+                    self._valid_expt_names(nmls, name_dict)
+                commt_dict = None  # Only valid for `MOM_input`
+                if k_sub.endswith(self.combo_suffix):
+                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
+                else:
+                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+                self.manage_expts(k)
+                
+            self.previous_key = k_sub
+            
+    def _process_MOM_input(self, nmls, k_tmp_dir, k):
+        MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, "MOM_input"))
+        param_dict = MOM_inputParser.param_dict
+        commt_dict = MOM_inputParser.commt_dict
+        
+        for k_sub in nmls:  # parameter groups, in which contains one or more specific parameters.
+            if k_sub.startswith(self.MOM_prefix):
+                name_dict = nmls[k_sub]
+                self._cal_num_expts(name_dict, k_sub)
+                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
+                    self._valid_expt_names(nmls, name_dict)
+                if k_sub.endswith(self.combo_suffix):
+                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
+                else:
+                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+                self.manage_expts(k)
+                
+            self.previous_key = k_sub
+
+    def _process_nuopc_runseq(self, nmls, k_tmp_dir, k):
+        for k_sub in nmls:
+            if k_sub.startswith('runseq_list'):
+                name_dict = nmls[k_sub]
+                self._cal_num_expts(name_dict, k_sub)
+                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
+                    self._valid_expt_names(nmls, name_dict)
+                commt_dict = None  # Only valid for `MOM_input`
+                if k_sub.endswith(self.combo_suffix):
+                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
+                else:
+                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+                self.manage_expts(k)
+                
+            self.previous_key = k_sub
+            
+    def _cal_num_expts(self, name_dict, k_sub):
+        """ Calculate the number of parameter-tunning experiments """
+        if k_sub.endswith(self.combo_suffix):
+            if isinstance(next(iter(name_dict.values())), list):
+                self.num_expts = len(next(iter(name_dict.values())))
+            else:
+                self.num_expts = 1
         else:
-             warnings.warn("NO namelists provided, hence there are no parameter-tunning tests!")
+            self.num_expts = 0
+            for v_s in name_dict.values():
+                if isinstance(v_s,list):
+                    self.num_expts += len(v_s)
+                else:
+                    self.num_expts = 1
+
+    def _valid_expt_names(self, nmls, name_dict):
+        """ Compare the number of parameter-tunning experiments with [optional] user-defined experiment names """
+        self.expt_names = nmls.get(self.previous_key)
+        if self.expt_names and len(self.expt_names) != self.num_expts:
+            raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
+                             f"is different from that of tunning parameters {name_dict}!"
+                             f"\nPlease double check the number or leave it/them blank!")
 
     def _generate_individual_dicts(self,name_dict,commt_dict,k_sub):
         """Each dictionary has a single key-value pair."""
@@ -473,6 +496,7 @@ class Expts_manager(object):
                         patch_dict[cice_group][cice_name] = cice_value
                 f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
                 os.rename(cice_path+'_tmp',cice_path)
+                
             elif self.tag_model == 'cpl_dt':
                 # apply changes
                 nuopc_runseq_file = os.path.join(expt_path,"nuopc.runseq")
@@ -492,10 +516,9 @@ class Expts_manager(object):
                         os.remove(dest)  # remove symlink
                     os.symlink(restartpath, dest)  # create symlink
 
-            
             # optionally update nuopc_config for perturbation runs
             self._update_nuopc_config_perturb(expt_path)
-            
+
             # Update config.yaml
             config_path = os.path.join(expt_path,"config.yaml")
             config_data = self._read_ryaml(config_path)
@@ -632,7 +655,7 @@ class Expts_manager(object):
     def _update_metadata_description(self, metadata,restartpath):
         """Update metadata description with experiment details."""
         tmp_string1 = (f"\nNOTE: this is a perturbation experiment, but the description above is for the control run."
-                    f"\nThis perturbation experiment is based on the control run\n {self.base_path} from {self.base_branch_name}")
+                    f"\nThis perturbation experiment is based on the control run {self.base_path} from {self.base_branch_name}")
         tmp_string2 = f"\nbut with initial condition {restartpath}."
         desc = metadata["description"]
         if desc is None:
@@ -641,7 +664,7 @@ class Expts_manager(object):
             desc += tmp_string1
         if tmp_string2.strip() not in desc.strip():
             desc += tmp_string2
-        metadata["description"] = desc
+        metadata["description"] = LiteralString(desc)
 
     def _remove_metadata_comments(self, key, metadata):
         """Remove comments after the key in metadata."""
