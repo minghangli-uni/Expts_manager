@@ -234,7 +234,9 @@ class Expts_manager(object):
 
     def _update_ctrl_expt(self):
         # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
-        self._update_config_files(self.base_path)
+        self._update_nuopc_config(self.base_path)
+        self._update_config_yaml(self.base_path)
+        self._update_cpl_dt(self.base_path)
 
         # modify namelist and MOM_input for the control experiment
         self._update_contrl_namelist()
@@ -491,7 +493,7 @@ class Expts_manager(object):
                     os.symlink(restartpath, dest)  # create symlink
 
             # optionally update nuopc_config for perturbation runs
-            self._update_nuopc_config_perturb(expt_path)
+            self._update_nuopc_config(expt_path)
 
             # Update config.yaml
             config_path = os.path.join(expt_path,"config.yaml")
@@ -579,27 +581,17 @@ class Expts_manager(object):
         mom6parser.parse_lines()
         return mom6parser
 
-    def _update_nuopc_config_perturb(self,path):    
-        """Update configuration files based on YAML settings."""
-        # Update nuopc.runconfig for the ctrl run
+    def _update_nuopc_config(self, path):
+        """ Update nuopc.runconfig for the ctrl run """
         nuopc_input = self.indata.get("perturb_run_config",None)
         if nuopc_input is not None:
             nuopc_file_path = os.path.join(path,"nuopc.runconfig")
             nuopc_runconfig = self.read_nuopc_config(nuopc_file_path)
             self._update_config_entries(nuopc_runconfig,nuopc_input)
             self.write_nuopc_config(nuopc_runconfig, nuopc_file_path)
-            
-    def _update_config_files(self,path):    
-        """Update configuration files based on YAML settings."""
-        # Update nuopc.runconfig for the ctrl run
-        nuopc_input = self.indata.get("nuopc_runconfig",None)
-        if nuopc_input is not None:
-            nuopc_file_path = os.path.join(path,"nuopc.runconfig")
-            nuopc_runconfig = self.read_nuopc_config(nuopc_file_path)
-            self._update_config_entries(nuopc_runconfig,nuopc_input)
-            self.write_nuopc_config(nuopc_runconfig, nuopc_file_path)
 
-        # Update config.yaml for the ctrl run
+    def _update_config_yaml(self, path):
+        """ Update config.yaml for the ctrl run """
         config_yaml_input = self.indata.get("config_yaml",None)
         if config_yaml_input is not None:
             config_yaml_file = os.path.join(path,"config.yaml")
@@ -607,7 +599,8 @@ class Expts_manager(object):
             self._update_config_entries(config_yaml,config_yaml_input)
             self._write_ryaml(config_yaml_file,config_yaml)
 
-        # Update coupling timestep through nuopc.runseq for the ctrl run
+    def _update_cpl_dt(self,path):
+        """ Update coupling timestep through nuopc.runseq for the ctrl run """
         cpl_dt_input = self.indata.get("cpl_dt",None)
         if cpl_dt_input is not None:
             nuopc_runseq_file = os.path.join(path,"nuopc.runseq")
