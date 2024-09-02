@@ -35,6 +35,13 @@ except ImportError:
 
 # ===========================================================================
 
+class LiteralString(str):
+    pass
+def represent_literal_str(dumper, data):
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+
+ryaml.representer.add_representer(LiteralString, represent_literal_str)
+
 def update_MOM6_params_override(param_dict_change, commt_dict_change):
     """
     Prepends `#override` to parameters for MOM6.
