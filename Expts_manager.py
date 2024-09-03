@@ -65,12 +65,18 @@ class Expts_manager(object):
     """
     DIR_MANAGER     = os.getcwd()
 
-    def __init__(self, MOM_prefix: str="MOM_list",combo_suffix: str="_combo",branch_perturb: str="perturb"):
+    def __init__(self,
+                 MOM_prefix: str='MOM_list',
+                 runseq_prefix: str='runseq_list',
+                 combo_suffix: str="_combo",
+                 branch_perturb: str="perturb"):
 
         self.dir_manager = self.DIR_MANAGER
+        self.MOM_prefix = MOM_prefix
+        self.runseq_prefix = runseq_prefix
         self.branch_perturb = branch_perturb
         self.combo_suffix = combo_suffix
-        self.MOM_prefix = MOM_prefix
+        
     
     def load_variables(self,yamlfile):
         """ 
@@ -93,7 +99,6 @@ class Expts_manager(object):
             ctrl_nruns (int): Number of control runs. It is associated with total number of output directories that have been generated
             pert_nruns (int): Number of perturbation experiment runs; associated with total number of output directories that have been generated
         """
-
         self.yamlfile = yamlfile
         self.indata = self._read_ryaml(yamlfile)
         self.utils_url = self.indata["utils_url"]
@@ -128,7 +133,6 @@ class Expts_manager(object):
         append_group_list (list): Specific for f90nml, the list containing tunning parameter
         expt_names list[str]: Optional user-defined directory names for perturbation experiments
         """
-
         self.nml_ctrl = None
         self.tag_model = None
         self.param_dict_change_list = []
@@ -139,8 +143,10 @@ class Expts_manager(object):
         self.diag_path = None
 
     def load_tools(self):
-        """Load external tools required for the experiments."""
-        # currently imported from a fork: https://github.com/minghangli-uni/om3-utils
+        """
+        Load external tools required for the experiments.
+        """
+        # currently import from a fork: https://github.com/minghangli-uni/om3-utils
         # will update the tool when it is merged to COSIMA/om3-utils
         def clone_repo(branch_name, url, path, tool_name):
             if not os.path.isdir(path):
@@ -168,6 +174,9 @@ class Expts_manager(object):
         self.write_nuopc_config = write_nuopc_config
 
     def create_test_path(self):
+        """
+        Create the local test directory for blocks of parameter testing.
+        """
         if os.path.exists(self.test_path):
             print(f"test directory {self.test_path} already exists!")
         else:
@@ -175,7 +184,9 @@ class Expts_manager(object):
             print(f"test directory {self.test_path} is created!")
          
     def manage_ctrl_expt(self):
-        """ Setup and run the control experiment """
+        """
+        Setup and run the control experiment
+        """
         self.base_path = os.path.join(self.test_path,self.base_dir_name)
         base_path = self.base_path
         ctrl_nruns = self.ctrl_nruns
@@ -187,14 +198,14 @@ class Expts_manager(object):
                 self._extract_config_via_commit()
                 if self.diag_ctrl:
                     self._copy_diag_table(base_path)
-                self._update_ctrl_expt()
+                self._setup_ctrl_expt()
                 self._check_and_commit_changes()
         else:
-            self._clone_template_repo()
+            self._clone_template_repo()  # clone the template repo and setup the control branch
             self._extract_config_via_commit()
             if self.diag_ctrl:
                 self._copy_diag_table(base_path)
-            self._update_ctrl_expt()
+            self._setup_ctrl_expt()
             self._check_and_commit_changes()
 
         # run the control experiment
@@ -210,7 +221,26 @@ class Expts_manager(object):
         else:
             print(f"ctrl_nruns is {ctrl_nruns}, hence no new control experiments will start!\n")
 
+    def _clone_template_repo(self):
+        """
+        Clone the template repo.
+        """
+        print(f"Cloning template from {self.template_url} to {self.base_path}")
+        command = f"payu clone {self.template_url} {self.base_path}"
+        subprocess.run(command, shell=True, check=False)
+
+    def _extract_config_via_commit(self):
+        """
+        Extract specific configuration via commit hash.
+        """
+        templaterepo = git.Repo(self.base_path)
+        print(f"Checking out commit {self.template_commit} and creating new branch {self.base_branch_name}!")
+        templaterepo.git.checkout('-b', self.base_branch_name, self.template_commit)  # checkout the new branch from the specific template commit
+
     def _copy_diag_table(self,path):
+        """
+        Copy the diagnostic table (`diag_table`) to the specified path if a path is defined.
+        """
         if self.diag_path:
             command = f"scp {os.path.join(self.diag_path,'diag_table')} {path}"
             subprocess.run(command, shell=True, check=False)
@@ -218,40 +248,30 @@ class Expts_manager(object):
         else:
             print(f"{self.diag_path} is not defined, hence skip copy diag_table to the control experiment")
 
-    def _clone_template_repo(self):
-        """ Clone the template repository and set up the ctrl branch. """
-        print(f"Cloning template from {self.template_url} to {self.base_path}")
-        command = f"payu clone {self.template_url} {self.base_path}"
-        subprocess.run(command, shell=True, check=False)
-        
-    def _extract_config_via_commit(self):
-        templaterepo = git.Repo(self.base_path)
-        print(f"Checking out commit {self.template_commit} and creating new branch {self.base_branch_name}!")
-        templaterepo.git.checkout('-b', self.base_branch_name, self.template_commit)  # checkout the new branch from the specific template commit
-
     def _count_file_nums(self):
+        """
+        Count the number of file numbers.
+        """
         return len(os.listdir(self.base_path))
 
-    def _update_ctrl_expt(self):
-        # Update configuration files, including `nuopc.runconfig`, `config.yaml`, only coupling timestep from `nuopc.runseq`
-        self._update_nuopc_config(self.base_path)
-        self._update_config_yaml(self.base_path)
-        self._update_cpl_dt(self.base_path)
-
-        # modify namelist and MOM_input for the control experiment
-        self._update_contrl_namelist()
+    def _setup_ctrl_expt(self):
+        # Update configuration files, namelist and MOM_input for the control experiment if needed.
+        self._update_contrl_params()
 
         # Payu setup && sweep to ensure the changes correctly && remove the `work` directory for the control run
         command = f"cd {self.base_path} && payu setup && payu sweep"
         subprocess.run(command, shell=True, check=False)
 
-    def _update_contrl_namelist(self):
+    def _update_contrl_params(self):
         """
-        Modify the namelist files (datm_in, drof_in, drv_in, ice_in and input.nml) based on the input YAML configuration for the ctrl experiment
+        Modify parameters based on the input YAML configuration for the ctrl experiment.
+
+        Update configuration files (config.yaml, nuopc.runconfig etc),
+        namelist and MOM_input for the control experiment if needed.
         """
         for file_name in os.listdir(self.base_path):
-            if file_name.endswith('_in') or file_name.endswith('.nml'):
-                yaml_data = self.indata.get(file_name,None)  # input yaml read
+            if file_name.endswith('_in') or file_name.endswith('.nml'):  # Update parameters from namelists
+                yaml_data = self.indata.get(file_name,None)
                 if yaml_data:
                     if 'dynamics_nml' in yaml_data and 'turning_angle' in yaml_data['dynamics_nml']:
                         cosw = np.cos(yaml_data['dynamics_nml']['turning_angle'] * np.pi / 180.)
@@ -262,8 +282,22 @@ class Expts_manager(object):
                     nml_ctrl = f90nml.read(os.path.join(self.base_path,file_name))  # read existing namelist file from the control experiment
                     self._update_config_entries(nml_ctrl,yaml_data)  # update the namelist with the yaml input file
                     nml_ctrl.write(os.path.join(self.base_path,file_name),force=True)  # write the updated namelist back to the file
-            if file_name == "MOM_input":
-                yaml_data = self.indata.get(file_name,None)  # input yaml read
+
+            if file_name in (('nuopc.runconfig', 'config.yaml')):  # Update config entries from `nuopc.runconfig` and `config_yaml`
+                yaml_data = self.indata.get(file_name,None)
+                if yaml_data:
+                    tmp_file_path = os.path.join(self.base_path,file_name)
+                    if file_name == 'nuopc.runconfig':
+                        file_read = self.read_nuopc_config(tmp_file_path)
+                        self._update_config_entries(file_read,yaml_data)
+                        self.write_nuopc_config(file_read, tmp_file_path)
+                    elif file_name == 'config.yaml':
+                        file_read = self._read_ryaml(tmp_file_path)
+                        self._update_config_entries(file_read,yaml_data)
+                        self._write_ryaml(file_read, tmp_file_path)
+
+            if file_name == 'MOM_input':  # Update parameters from `MOM_input`
+                yaml_data = self.indata.get(file_name,None)
                 if yaml_data:
                     MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, file_name))  # parse existing MOM_input
                     param_dict = MOM_inputParser.param_dict  # read parameter dictionary
@@ -271,7 +305,17 @@ class Expts_manager(object):
                     param_dict.update(yaml_data)
                     MOM_inputParser.writefile_MOM_input(os.path.join(self.base_path, file_name))  # overwrite to the same `MOM_input`
 
+            if file_name == 'nuopc.runseq':  # Update only coupling timestep from `nuopc.runseq`
+                yaml_data = self.indata.get('cpl_dt',None)
+                if yaml_data:
+                    nuopc_runseq_file = os.path.join(self.base_path,file_name)
+                    self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,yaml_data)
+
     def _check_and_commit_changes(self):
+        """
+        Checks the current state of the repo, stages relevant changes, and commits them.
+        If no changes are detected, it provides a message indicating that no commit was made.
+        """
         repo = git.Repo(self.base_path)
         print(f"Current base branch is: {repo.active_branch.name}")
         deleted_files = self._get_deleted_files(repo)
@@ -288,84 +332,129 @@ class Expts_manager(object):
         else:
             print(f"Nothing changed, hence no further commits to the {self.base_path} repo!")
 
-    def setup_perturb_expt(self):
-        # Check namelists in `Expts_manager.yaml`
+    def manage_perturb_expt(self):
+        """
+        Sets up perturbation experiments based on the configuration provided in `Expts_manager.yaml`.
+
+        This function processes various parameter blocks defined in the YAML configuration, which may include
+        1. namelist files (`_in`, `.nml`),
+        2. MOM6 input files (`MOM_input`),
+        3. `nuopc.runconfig`,
+        4. `nuopc.runseq` (currently only for the coupling timestep).
+
+        Raises:
+            - Warning: If no namelist configurations are provided, the function issues a warning indicating that no parameter tuning tests will be conducted.
+        """
         namelists = self.indata["namelists"]  # main section, top level key that groups different namlists
         if not namelists:
-            warnings.warn("NO namelists provided, hence there are no parameter-tunning tests!")
+            warnings.warn("NO namelists were provided, hence there are no parameter-tunning tests!")
             return
 
-        for k, nmls in namelists.items():  # k and nmls: specific namelist related to different blocks of parameters
+        for k, nmls in namelists.items():
             if not nmls:
                 continue
-            if k.endswith(('_in', '.nml')):  # parameter blocks, in which contains one or more groups of parameters, e.g., input.nml, ice_in etc.
-                self.tag_model = 'nml'
-                k_tmp_dir = k[:-3] if k.endswith('_in') else k[:-4]  # [Optional] user-defined directory name for each test
-                self._process_nmls(nmls,k_tmp_dir, k)
-                
-            elif k == "MOM_input":  # parameter blocks specific for parameters of `MOM_input`
-                self.tag_model = 'mom6'
-                k_tmp_dir = k  # [Optional] user-defined directory name for each test
-                self._process_MOM_input(nmls, k_tmp_dir, k)
-                
-            elif k == "nuopc.runseq":  # parameter blocks specific for parameters of `MOM_input`
-                self.tag_model = 'cpl_dt'
-                k_tmp_dir = k[-6:]  # [Optional] user-defined directory name for each test
-                self._process_nuopc_runseq(nmls, k_tmp_dir, k)
+            self._process_params_blocks(k, nmls)
 
-    def _process_nmls(self, nmls, k_tmp_dir, k):
-        for k_sub in nmls:  # parameter groups, in which contains one or more specific parameters.
-            if k_sub.endswith('_nml') or k_sub.endswith(self.combo_suffix):
-                name_dict = nmls[k_sub]
-                self._cal_num_expts(name_dict, k_sub)
-                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
-                    self._valid_expt_names(nmls, name_dict)
-                commt_dict = None  # Only valid for `MOM_input`
-                if k_sub.endswith(self.combo_suffix):
-                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
-                else:
-                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                self.manage_expts(k)
-                
-            self.previous_key = k_sub
-            
-    def _process_MOM_input(self, nmls, k_tmp_dir, k):
-        MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, "MOM_input"))
-        param_dict = MOM_inputParser.param_dict
-        commt_dict = MOM_inputParser.commt_dict
+    def _process_params_blocks(self, k, nmls):
+        """
+        Determine the type of parameter block and processes it accordingly.
         
-        for k_sub in nmls:  # parameter groups, in which contains one or more specific parameters.
-            if k_sub.startswith(self.MOM_prefix):
-                name_dict = nmls[k_sub]
-                self._cal_num_expts(name_dict, k_sub)
-                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
-                    self._valid_expt_names(nmls, name_dict)
-                if k_sub.endswith(self.combo_suffix):
-                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
-                else:
-                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                self.manage_expts(k)
-                
-            self.previous_key = k_sub
+        Args:
+            k (str): The key indicating the type of parameter block.
+            nmls (dict): The namelist dictionary for the parameter block.
+        """
+        self.tag_model, expt_dir_name = self._determine_block_type(k)
 
-    def _process_nuopc_runseq(self, nmls, k_tmp_dir, k):
-        for k_sub in nmls:
-            if k_sub.startswith('runseq_list'):
-                name_dict = nmls[k_sub]
-                self._cal_num_expts(name_dict, k_sub)
-                if self.previous_key and self.previous_key.startswith(k_tmp_dir):
-                    self._valid_expt_names(nmls, name_dict)
-                commt_dict = None  # Only valid for `MOM_input`
-                if k_sub.endswith(self.combo_suffix):
-                    self._generate_combined_dicts(name_dict,commt_dict,k_sub)
-                else:
-                    self._generate_individual_dicts(name_dict,commt_dict,k_sub)
-                self.manage_expts(k)
-                
-            self.previous_key = k_sub
+        for k_sub in nmls:  # parameter groups, in which contains one or more specific parameters.
+            self._process_params_group(k, k_sub, nmls, expt_dir_name, self.tag_model)
+
+    def _determine_block_type(self, k):
+        """
+        Determine the type of parameter block based on the key.
+
+        Args:
+            k (str): The key indicating the type of parameter block.
+        """
+        if k.endswith(('_in', '.nml')):  # parameter blocks, in which contains one or more groups of parameters, e.g., input.nml, ice_in etc.
+            tag_model = 'nml'
+            expt_dir_name = k[:-3] if k.endswith('_in') else k[:-4]  # [Optional] user-defined directory name for each test
+        elif k == 'MOM_input':
+            tag_model = 'mom6'
+            expt_dir_name = k
+        elif k == 'nuopc.runseq':
+            tag_model = 'cpl_dt'
+            expt_dir_name = k[-6:]
+        else:
+            raise ValueError(f"Unsupported block type: {k}")
+        return tag_model, expt_dir_name
+
+    def _process_params_group(self, k, k_sub, nmls, expt_dir_name, tag_model):
+        """
+        Processes individual parameter groups based on the tag model.
+
+        Args:
+            k (str): The key indicating the type of parameter block.
+            k_sub (str): The key for the specific parameter group.
+            nmls (dict): The namelist dictionary for the parameter block.
+            expt_dir_name (str): The user-defined directory name. [Optional]
+            tag_model (str): The tag model indicating the type of parameter block.
+        """
+        if tag_model == 'nml':
+            self._handle_nml_group(k, k_sub, expt_dir_name, nmls)
+        elif tag_model == 'mom6':
+            self._handle_mom6_group(k, k_sub, expt_dir_name, nmls)
+        elif tag_model == 'cpl_dt':
+            self._handle_cpl_dt_group(k, k_sub, expt_dir_name, nmls)
+        self.previous_key = k_sub
+
+    def _handle_nml_group(self, k, k_sub, expt_dir_name, nmls):
+        """
+        Handles namelist parameter groups specific to `nml` tag model.
+        """
+        if k_sub.endswith('_nml') or k_sub.endswith(self.combo_suffix):
+            self._process_parameter_group_common(k, k_sub, nmls, expt_dir_name)
+
+    def _handle_mom6_group(self, k, k_sub, expt_dir_name, nmls):
+        """
+        Handles namelist parameter groups specific to `mom6` tag model.
+        """
+        if k_sub.startswith(self.MOM_prefix):
+            MOM_inputParser = self._parser_mom6_input(os.path.join(self.base_path, 'MOM_input'))
+            commt_dict = MOM_inputParser.commt_dict
+            self._process_parameter_group_common(k, k_sub, nmls, expt_dir_name, commt_dict=commt_dict)
+
+    def _handle_cpl_dt_group(self, k, k_sub, expt_dir_name, nmls):
+        """
+        Handles namelist parameter groups specific to `cpl_dt` tag model.
+        """
+        if k_sub.startswith(self.runseq_prefix):
+            self._process_parameter_group_common(k, k_sub, nmls, expt_dir_name)
+
+    def _process_parameter_group_common(self, k, k_sub, nmls, expt_dir_name, commt_dict=None):
+        """
+        Processes parameter groups common to all tag models.
+
+        Args:
+            k (str): The key indicating the type of parameter block.
+            k_sub (str): The key for the specific parameter group.
+            nmls (dict): The namelist dictionary for the parameter block.
+            k_tmp_dir (str): The temporary directory name.
+            commt_dict (dict, optional): A dictionary of comments, if applicable.
+        """
+        name_dict = nmls[k_sub]
+        self._cal_num_expts(name_dict, k_sub)
+        if self.previous_key and self.previous_key.startswith(expt_dir_name):
+            self._valid_expt_names(nmls, name_dict)
+        if k_sub.endswith(self.combo_suffix):
+            self._generate_combined_dicts(name_dict,commt_dict,k_sub)
+        else:
+            self._generate_individual_dicts(name_dict,commt_dict,k_sub)
+        self.setup_expts(k)
             
     def _cal_num_expts(self, name_dict, k_sub):
-        """ Calculate the number of parameter-tunning experiments """
+        """
+        Evaluate the number of parameter-tunning experiments.
+        """
         if k_sub.endswith(self.combo_suffix):
             if isinstance(next(iter(name_dict.values())), list):
                 self.num_expts = len(next(iter(name_dict.values())))
@@ -380,7 +469,9 @@ class Expts_manager(object):
                     self.num_expts = 1
 
     def _valid_expt_names(self, nmls, name_dict):
-        """ Compare the number of parameter-tunning experiments with [optional] user-defined experiment names """
+        """
+        Compare the number of parameter-tunning experiments with [optional] user-defined experiment names
+        """
         self.expt_names = nmls.get(self.previous_key)
         if self.expt_names and len(self.expt_names) != self.num_expts:
             raise ValueError(f"The number of user-defined experiment directories {self.expt_names} "
@@ -388,7 +479,9 @@ class Expts_manager(object):
                              f"\nPlease double check the number or leave it/them blank!")
 
     def _generate_individual_dicts(self,name_dict,commt_dict,k_sub):
-        """Each dictionary has a single key-value pair."""
+        """
+        Each dictionary has a single key-value pair.
+        """
         param_dict_change_list = []
         append_group_list = []
         for k, vs in name_dict.items():
@@ -409,7 +502,9 @@ class Expts_manager(object):
             self.append_group_list = append_group_list
 
     def _generate_combined_dicts(self,name_dict,commt_dict,k_sub):
-        """Generate a list of dictionaries where each dictionary contains all keys with values from the same index."""
+        """
+        Generate a list of dictionaries where each dictionary contains all keys with values from the same index.
+        """
         param_dict_change_list = []
         append_group_list = []
         for i in range(self.num_expts):
@@ -423,16 +518,16 @@ class Expts_manager(object):
         elif self.tag_model == 'nml':
             self.append_group_list = append_group_list
 
-    def manage_expts(self,namelist_name):
+    def setup_expts(self,namelist_name):
         """ setup expts, and run expts"""
         for i in range(len(self.param_dict_change_list)):
-            
             # for each experiment
             param_dict = self.param_dict_change_list[i]
             print(param_dict)
+
             if self.tag_model == 'nml':
-                cice_group = self.append_group_list[i]
-                
+                nml_group = self.append_group_list[i]
+
             if self.expt_names is None:
                 expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])  # if `expt_names` does not exist, expt_name is set as the tunning parameters appending with associated values
             else:
@@ -444,10 +539,11 @@ class Expts_manager(object):
                 print("-- not creating ", expt_path, " - already exists!")
             else:
                 if self.check_skipping:
-                    self._check_skipping(param_dict, cice_group, namelist_name, expt_path)
+                    if self.tag_model == 'nml':
+                        self._check_skipping(param_dict, nml_group, namelist_name, expt_path)
 
                 print(f"Directory {expt_path} not exists, hence cloning template!")
-                command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}" # automatically leave a commit with expt uuid
+                command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}"  # automatically leave a commit with expt uuid
                 subprocess.run(command, shell=True, check=True)
 
             # Update `MOM_override` or/and `ice_in`
@@ -460,17 +556,17 @@ class Expts_manager(object):
             elif self.tag_model == 'nml':
                 # apply changes
                 cice_path = os.path.join(expt_path,namelist_name)
-                if cice_group.endswith(self.combo_suffix):  # rename the namlist by removing the suffix if the suffix with `_combo`
-                    cice_group = cice_group[:-len(self.combo_suffix)]
-                patch_dict = {cice_group: {}}
+                if nml_group.endswith(self.combo_suffix):  # rename the namlist by removing the suffix if the suffix with `_combo`
+                    nml_group = nml_group[:-len(self.combo_suffix)]
+                patch_dict = {nml_group: {}}
                 for cice_name, cice_value in param_dict.items():
                     if cice_name == 'turning_angle':
                         cosw = np.cos(cice_value * np.pi / 180.)
                         sinw = np.sin(cice_value * np.pi / 180.)
-                        patch_dict[cice_group]['cosw'] = cosw
-                        patch_dict[cice_group]['sinw'] = sinw
+                        patch_dict[nml_group]['cosw'] = cosw
+                        patch_dict[nml_group]['sinw'] = sinw
                     else:  # for generic parameters
-                        patch_dict[cice_group][cice_name] = cice_value
+                        patch_dict[nml_group][cice_name] = cice_value
                 f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
                 os.rename(cice_path+'_tmp',cice_path)
 
@@ -493,13 +589,13 @@ class Expts_manager(object):
                     os.symlink(restartpath, dest)  # create symlink
 
             # optionally update nuopc_config for perturbation runs
-            self._update_nuopc_config(expt_path)
+            self._update_nuopc_config_perturb(expt_path)
 
             # Update config.yaml
             config_path = os.path.join(expt_path,"config.yaml")
             config_data = self._read_ryaml(config_path)
             config_data["jobname"] = expt_name
-            self._write_ryaml(config_path,config_data)
+            self._write_ryaml(config_data, config_path)
 
             # Update metadata.yaml
             metadata_path = os.path.join(expt_path, "metadata.yaml")  # metadata path for each perturbation
@@ -511,7 +607,7 @@ class Expts_manager(object):
             keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
             metadata["keywords"] = f"{self.base_dir_name}, {self.branch_perturb}, {keywords}"  # update `keywords`
             self._remove_metadata_comments("keywords", metadata)  # remove None comments from `keywords`
-            self._write_ryaml(metadata_path, metadata)  # write to file
+            self._write_ryaml(metadata, metadata_path)  # write to file
 
             # clean `work` directory for failed jobs
             self._clean_workspace(expt_path)
@@ -529,11 +625,11 @@ class Expts_manager(object):
 
         self.expt_names = None  # reset to None after the loop to update user-defined perturbation experiment names!
 
-    def _check_skipping(self, param_dict, cice_group, namelist_name, expt_path):
+    def _check_skipping(self, param_dict, nml_group, namelist_name, expt_path):
         # create perturbation experiment - check if needs skipping!
         if self.tag_model == 'nml':
-            if cice_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
-                cice_group = cice_group[:-len(self.combo_suffix)]
+            if nml_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
+                nml_group = nml_group[:-len(self.combo_suffix)]
             cice_name = param_dict.keys()
             if len(cice_name) == 1:  # one param:value pair
                 cice_value = param_dict[list(cice_name)[0]]
@@ -547,15 +643,15 @@ class Expts_manager(object):
             # load nml of the control experiment
             self.nml_ctrl = f90nml.read(os.path.join(self.base_path,namelist_name))
     
-            if all(cn in self.nml_ctrl.get(cice_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
+            if all(cn in self.nml_ctrl.get(nml_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
                 if 'turning_angle' in param_dict:
-                    skip = (self.nml_ctrl[cice_group]['cosw'] == cosw and 
-                            self.nml_ctrl[cice_group]['sinw'] == sinw and
-                            all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name if cn not in ['cosw', 'sinw']))
+                    skip = (self.nml_ctrl[nml_group]['cosw'] == cosw and
+                            self.nml_ctrl[nml_group]['sinw'] == sinw and
+                            all(self.nml_ctrl[nml_group].get(cn) == param_dict[cn] for cn in cice_name if cn not in ['cosw', 'sinw']))
                 else:
-                    skip = all(self.nml_ctrl[cice_group].get(cn) == param_dict[cn] for cn in cice_name)
+                    skip = all(self.nml_ctrl[nml_group].get(cn) == param_dict[cn] for cn in cice_name)
             else:
-                print(f"Not all {cice_name} are found in {cice_group}, hence not skipping!")
+                print(f"Not all {cice_name} are found in {nml_group}, hence not skipping!")
                 skip = False
     
             if skip:
@@ -573,7 +669,7 @@ class Expts_manager(object):
             command = f"payu sweep && payu setup"
             subprocess.run(command, shell=True, check=False)
             print(f"Clean up a failed job {work_dir} and prepare it for resubmission.")
-            
+
     def _parser_mom6_input(self, path):
         """ parse MOM6 input file """
         mom6parser = self.MOM6InputParser.MOM6InputParser()
@@ -581,7 +677,7 @@ class Expts_manager(object):
         mom6parser.parse_lines()
         return mom6parser
 
-    def _update_nuopc_config(self, path):
+    def _update_nuopc_config_perturb(self, path):
         """ Update nuopc.runconfig for the ctrl run """
         nuopc_input = self.indata.get("perturb_run_config",None)
         if nuopc_input is not None:
@@ -590,22 +686,13 @@ class Expts_manager(object):
             self._update_config_entries(nuopc_runconfig,nuopc_input)
             self.write_nuopc_config(nuopc_runconfig, nuopc_file_path)
 
-    def _update_config_yaml(self, path):
-        """ Update config.yaml for the ctrl run """
-        config_yaml_input = self.indata.get("config_yaml",None)
-        if config_yaml_input is not None:
-            config_yaml_file = os.path.join(path,"config.yaml")
-            config_yaml = self._read_ryaml(config_yaml_file)
-            self._update_config_entries(config_yaml,config_yaml_input)
-            self._write_ryaml(config_yaml_file,config_yaml)
-
     def _update_cpl_dt(self,path):
         """ Update coupling timestep through nuopc.runseq for the ctrl run """
         cpl_dt_input = self.indata.get("cpl_dt",None)
         if cpl_dt_input is not None:
             nuopc_runseq_file = os.path.join(path,"nuopc.runseq")
             self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,cpl_dt_input)
-    
+
     def _update_config_entries(self,base,change):
         """ recursively update nuopc_runconfig and config.yaml entries """
         for k,v in change.items():
@@ -651,7 +738,7 @@ class Expts_manager(object):
         with open(yaml_path, "r") as f:
             return ryaml.load(f)
 
-    def _write_ryaml(self,yaml_path,data):
+    def _write_ryaml(self,data,yaml_path):
         """ Write yaml file and preserve comments"""
         with open(yaml_path, "w") as f:
             ryaml.dump(data,f)
@@ -696,7 +783,7 @@ class Expts_manager(object):
         self.manage_ctrl_expt()
         if self.run_namelists:
             print("==== Start perturbation experiments ====")
-            self.setup_perturb_expt()
+            self.manage_perturb_expt()
             
         
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ base_dir_name: Ctrl-1deg_jra55do_ryf  # Directory name where the control experim
 base_branch_name: ctrl  # Branch name for the control experiment (user-defined)
 #test_path: "30_tracer_ts"  # Path for all test runs; include both control and perturbation runs here (user-defined)
 #test_path: "product1"
-test_path: "test_can_delete"
+test_path: "test_can_delete4"
 
 # ============ diagnostic table =======================
 diag_url: "git@github.com:minghangli-uni/make_diag_table.git"
@@ -31,7 +31,7 @@ diag_ctrl: False
 diag_pert: True
 
 # ============ Control Experiment Setup ======================= 
-config_yaml: # Configuration parameters for setting up the control experiment
+config.yaml: # Configuration parameters for setting up the control experiment
     ncpus: 240
     mem: 960GB
     walltime: 24:00:00
@@ -39,8 +39,8 @@ config_yaml: # Configuration parameters for setting up the control experiment
     metadata:
         enable: true 
     runlog: true
-cpl_dt:  # Coupling timestep in the `nuopc_runseq` 
-nuopc_runconfig:  # NUOPC configuration; accept all entries based on the needs
+cpl_dt: 5400.0  # Coupling timestep in the `nuopc_runseq` 
+nuopc.runconfig:  # NUOPC configuration; accept all entries based on the needs
     CLOCK_attributes:
         stop_option: nyears
         stop_n: 5
@@ -58,9 +58,9 @@ nuopc_runconfig:  # NUOPC configuration; accept all entries based on the needs
         wav_ntasks: 1
 ice_in:
     domain_nml:
-        max_blocks: 15
-        block_size_x: 15
-        block_size_y: 20
+        max_blocks: -1
+        block_size_x: 30
+        block_size_y: 40
 #    thermo_nml:
 #        dsdt_slow_mode: -5e-08
 #    dynamics_nml:
@@ -72,9 +72,9 @@ input.nml:
         max_files: 200
         max_num_axis_sets: 200
 
-#MOM_input:
-#    HFREEZE: 12
-#    BOUND_SALINITY: False
+MOM_input:
+    HFREEZE: 12
+    BOUND_SALINITY: False
 
 
 # ============ Perturbation Experiment Setup [Optional] =======================
@@ -128,7 +128,10 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
 #            DIABATIC_FIRST:        [True   , False   , False   , False  , False  , False  , False  , False  , False  , False   , False   , False   , False   , False   , False   ]
 #            THERMO_SPANS_COUPLING: [False  , True    , True    , True   , True   , True   , True   , True   , True   , True    , True    , True    , True    , True    , True    ]
 #            DTBT_RESET_PERIOD:     [0.0    , 108000.0, 0.0     , 90000.0, 0.0    , 72000.0, 0.0    , 54000.0, 0.0    , 36000.0 , 0.0     , 18000.0 , 0.0     , 7200.0  , 0.0     ]
-
+        MOM_input_dir1:             ['lexpt0','lexpt1']
+        MOM_list1_combo:
+            DT_THERM:              [3600.0 ,108000.0]
+            DIABATIC_FIRST:        [True   , False]     
         MOM_input_dir2: ['expt5']
         MOM_list2: 
             THICKNESSDIFFUSE: False
