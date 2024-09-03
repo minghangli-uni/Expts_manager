@@ -14,17 +14,16 @@ utils_branch_name: "main"  # The branch for which the utility tool will be check
 utils_dir_name: "om3-utils"  # Directory name for the utility tool (user-defined)
 
 # ============ Template Setup =======================
-template_url: "git@github.com:minghangli-uni/MOM6-CICE6.git"  # Git URL for the control experiment 
-template_commit: 2bc6107 # Specific commit hash in the template repository to extract configuration from
+base_url: "git@github.com:minghangli-uni/MOM6-CICE6.git"  # Git URL for the control experiment 
+base_commit: 2bc6107 # Specific commit hash in the template repository to extract configuration from
 base_dir_name: Ctrl-1deg_jra55do_ryf  # Directory name where the control experiment will be cloned (user-defined)
 base_branch_name: ctrl  # Branch name for the control experiment (user-defined)
 #test_path: "30_tracer_ts"  # Path for all test runs; include both control and perturbation runs here (user-defined)
 #test_path: "product1"
-test_path: "test_can_delete4"
+test_path: "test_can_delete6"
 
 # ============ diagnostic table =======================
 diag_url: "git@github.com:minghangli-uni/make_diag_table.git"
-diag_commit: ca83cbb
 diag_branch_name: "general_scheme1"
 diag_dir_name: "make_diag_table"
 diag_ctrl: False
@@ -157,7 +156,7 @@ namelists:  # Fine-tuning parameters for the perturbations; define as needed for
 # ============ Control experiment and perturbation Runs ===================================
 ctrl_nruns: 0  # Number of control experiment runs
 run_namelists: True 
-check_skipping: True
+#check_skipping: True
 force_restart: False
 startfrom: 'rest'  # Restart number of the control experiment used as an initial condition for perturbation tests; or use 'rest' to start from the initial state
 nruns: 0  # Total number of output directories to generate for each Expts_manager member
