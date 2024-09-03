@@ -377,7 +377,7 @@ class Expts_manager(object):
         """
         if k.endswith(('_in', '.nml')):  # parameter blocks, in which contains one or more groups of parameters, e.g., input.nml, ice_in etc.
             tag_model = 'nml'
-            expt_dir_name = k[:-3] if k.endswith('_in') else k[:-4]  # [Optional] user-defined directory name for each test
+            expt_dir_name = k[:-3] if k.endswith('_in') else k[:-4]  # [Optional] The key in the YAML file specifies a list of user-defined directory names related to parameter testing.
         elif k == 'MOM_input':
             tag_model = 'mom6'
             expt_dir_name = k
@@ -396,7 +396,7 @@ class Expts_manager(object):
             k (str): The key indicating the type of parameter block.
             k_sub (str): The key for the specific parameter group.
             nmls (dict): The namelist dictionary for the parameter block.
-            expt_dir_name (str): The user-defined directory name. [Optional]
+            expt_dir_name (str, optional): The key in the YAML file specifies a list of user-defined directory names related to parameter testing.
             tag_model (str): The tag model indicating the type of parameter block.
         """
         if tag_model == 'nml':
@@ -432,13 +432,13 @@ class Expts_manager(object):
 
     def _process_parameter_group_common(self, k, k_sub, nmls, expt_dir_name, commt_dict=None):
         """
-        Processes parameter groups common to all tag models.
+        Processes parameter groups to all tag models.
 
         Args:
             k (str): The key indicating the type of parameter block.
             k_sub (str): The key for the specific parameter group.
             nmls (dict): The namelist dictionary for the parameter block.
-            k_tmp_dir (str): The temporary directory name.
+            expt_dir_name (str, optional): The key in the YAML file specifies a list of user-defined directory names related to parameter testing.
             commt_dict (dict, optional): A dictionary of comments, if applicable.
         """
         name_dict = nmls[k_sub]
@@ -518,115 +518,199 @@ class Expts_manager(object):
         elif self.tag_model == 'nml':
             self.append_group_list = append_group_list
 
-    def setup_expts(self,namelist_name):
-        """ setup expts, and run expts"""
-        for i in range(len(self.param_dict_change_list)):
-            # for each experiment
-            param_dict = self.param_dict_change_list[i]
+######################################################################
+####################### setup_expts ##################################
+######################################################################
+    def setup_expts(self,parameter_block):
+        for i, param_dict in enumerate(self.param_dict_change_list):
             print(param_dict)
 
-            if self.tag_model == 'nml':
-                nml_group = self.append_group_list[i]
-
-            if self.expt_names is None:
-                expt_name = "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[i].items()])  # if `expt_names` does not exist, expt_name is set as the tunning parameters appending with associated values
-            else:
-                expt_name = self.expt_names[i]  # user-defined folder names for parameter-tunning experiments
-            rel_path = os.path.join(self.test_path,expt_name)
-            expt_path = os.path.join(self.dir_manager,rel_path)
+            expt_name = self._generate_expt_names(i)
+            expt_path = os.path.join(self.dir_manager, self.test_path, expt_name)
 
             if os.path.exists(expt_path):
-                print("-- not creating ", expt_path, " - already exists!")
+                print(f"-- not creating {expt_path} - already exists!")
             else:
-                if self.check_skipping:
-                    if self.tag_model == 'nml':
-                        self._check_skipping(param_dict, nml_group, namelist_name, expt_path)
+                self._generate_expt_directory(expt_path, parameter_block, i)
 
-                print(f"Directory {expt_path} not exists, hence cloning template!")
-                command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}"  # automatically leave a commit with expt uuid
-                subprocess.run(command, shell=True, check=True)
-
-            # Update `MOM_override` or/and `ice_in`
             if self.tag_model == 'mom6':
-                # apply changes and write them to `MOM_override`
-                MOM6_or_parser = self._parser_mom6_input(os.path.join(expt_path, "MOM_override"))  # parse MOM_override
-                MOM6_or_parser.param_dict, MOM6_or_parser.commt_dict = update_MOM6_params_override(param_dict,self.commt_dict_change)  # update the tunning parameters, values and associated comments
-                MOM6_or_parser.writefile_MOM_input(os.path.join(expt_path, "MOM_override"))  # write to file
-
+                self._update_mom6_params(expt_path, param_dict)
             elif self.tag_model == 'nml':
-                # apply changes
-                cice_path = os.path.join(expt_path,namelist_name)
-                if nml_group.endswith(self.combo_suffix):  # rename the namlist by removing the suffix if the suffix with `_combo`
-                    nml_group = nml_group[:-len(self.combo_suffix)]
-                patch_dict = {nml_group: {}}
-                for cice_name, cice_value in param_dict.items():
-                    if cice_name == 'turning_angle':
-                        cosw = np.cos(cice_value * np.pi / 180.)
-                        sinw = np.sin(cice_value * np.pi / 180.)
-                        patch_dict[nml_group]['cosw'] = cosw
-                        patch_dict[nml_group]['sinw'] = sinw
-                    else:  # for generic parameters
-                        patch_dict[nml_group][cice_name] = cice_value
-                f90nml.patch(cice_path, patch_dict, cice_path+'_tmp')
-                os.rename(cice_path+'_tmp',cice_path)
-
+                self._update_nml_params(expt_path, param_dict, parameter_block, i)
             elif self.tag_model == 'cpl_dt':
-                # apply changes
-                nuopc_runseq_file = os.path.join(expt_path,"nuopc.runseq")
-                self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,param_dict[next(iter(param_dict.keys()))])
+                self._update_cpl_dt_params(expt_path, param_dict)
 
             if self.diag_pert:
                 self._copy_diag_table(expt_path)
 
             if self.startfrom_str != 'rest':  # symlink restart directories
-                link_restart = os.path.join('archive','restart'+self.startfrom_str)  # 
-                restartpath = os.path.realpath(os.path.join(self.base_path,link_restart))  # restart dir from control experiment
-                dest = os.path.join(expt_path, link_restart)  # restart dir symlink for each perturbation experiment
-                # only create symlink if it doesnt exist or force_restart is enabled
-                if not os.path.islink(dest) or self.force_restart or (os.path.islink(dest) and not os.path.exists(os.readlink(dest))):
-                    if os.path.exists(dest) or os.path.islink(dest):
-                        os.remove(dest)  # remove symlink
-                    os.symlink(restartpath, dest)  # create symlink
+                self._generate_restart_symlink(expt_path)
 
-            # optionally update nuopc_config for perturbation runs
+            # optionally update nuopc.runconfig for perturbation runs
             self._update_nuopc_config_perturb(expt_path)
 
-            # Update config.yaml
-            config_path = os.path.join(expt_path,"config.yaml")
-            config_data = self._read_ryaml(config_path)
-            config_data["jobname"] = expt_name
-            self._write_ryaml(config_data, config_path)
-
-            # Update metadata.yaml
-            metadata_path = os.path.join(expt_path, "metadata.yaml")  # metadata path for each perturbation
-            metadata = self._read_ryaml(metadata_path)  # load metadata of each perturbation
-            if self.startfrom_str == 'rest':
-                restartpath = 'rest'
-            self._update_metadata_description(metadata,restartpath)  # update `description`
-            self._remove_metadata_comments("description", metadata)  # remove None comments from `description`
-            keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
-            metadata["keywords"] = f"{self.base_dir_name}, {self.branch_perturb}, {keywords}"  # update `keywords`
-            self._remove_metadata_comments("keywords", metadata)  # remove None comments from `keywords`
-            self._write_ryaml(metadata, metadata_path)  # write to file
+            self._update_config_yaml_perturb(expt_path, expt_name)
+            self._update_metadata_yaml_perturb(expt_path, param_dict)
 
             # clean `work` directory for failed jobs
             self._clean_workspace(expt_path)
 
-            doneruns = len(glob.glob(os.path.join(expt_path,"archive","output[0-9][0-9][0-9]*")))
             # start runs, count existing runs and do additional runs if needed
-            if self.nruns > 0:
-                newruns = self.nruns - doneruns
-                if newruns > 0:
-                    command = f"cd {expt_path} && payu run -n {newruns} -f"
-                    subprocess.run(command, check=False, shell=True)
-                    print('\n')
-                else:
-                    print(f"-- `{expt_name}` has already completed {doneruns} runs! Hence stop running!\n")
+            self._start_experiment_runs(expt_path, expt_name)
 
         self.expt_names = None  # reset to None after the loop to update user-defined perturbation experiment names!
 
-    def _check_skipping(self, param_dict, nml_group, namelist_name, expt_path):
-        # create perturbation experiment - check if needs skipping!
+    def _start_experiment_runs(self, expt_path, expt_name):
+        """
+        Run perturbation experiments.
+
+        Args:
+            expt_path (str): The path to the perturbation experiment directory.
+            expt_name (str): The name of the perturbation experiment.
+        """
+        doneruns = len(glob.glob(os.path.join(expt_path, "archive", "output[0-9][0-9][0-9]*")))
+        if self.nruns > 0:
+            newruns = self.nruns - doneruns
+            if newruns > 0:
+                command = f"cd {expt_path} && payu run -n {newruns} -f"
+                subprocess.run(command, shell=True, check=False)
+                print('\n')
+            else:
+                print(f"-- `{expt_name}` has already completed {doneruns} runs! Hence, stopping further runs.\n")
+
+    def _update_metadata_yaml_perturb(self, expt_path, param_dict):
+        """
+        Updates the `metadata.yaml` file with relevant metadata.
+
+        Args:
+            expt_path (str): The path to the perturbation experiment directory.
+            param_dict (dict): The dictionary of parameters to include in metadata.
+        """
+        metadata_path = os.path.join(expt_path, "metadata.yaml")  # metadata path for each perturbation
+        metadata = self._read_ryaml(metadata_path)  # load metadata of each perturbation
+        if self.startfrom_str == 'rest':
+            restartpath = 'rest'
+        self._update_metadata_description(metadata,restartpath)  # update `description`
+        self._remove_metadata_comments("description", metadata)  # remove None comments from `description`
+        keywords = self._extract_metadata_keywords(param_dict)  # extract parameters from the change list
+        metadata["keywords"] = f"{self.base_dir_name}, {self.branch_perturb}, {keywords}"  # update `keywords`
+        self._remove_metadata_comments("keywords", metadata)  # remove None comments from `keywords`
+        self._write_ryaml(metadata, metadata_path)  # write to file
+
+    def _update_config_yaml_perturb(self, expt_path, expt_name):
+        """
+        Update `jobname` only for now.
+
+        Args:
+            expt_path (str): The path to the perturbation experiment directory.
+            expt_name (str): The name of the perturbation experiment.
+        """
+        config_path = os.path.join(expt_path, "config.yaml")
+        config_data = self._read_ryaml(config_path)
+        config_data["jobname"] = expt_name
+        self._write_ryaml(config_data, config_path)
+
+    def _generate_restart_symlink(self, expt_path):
+        """
+        Generate a symlink to the restart directory if needed.
+
+        Args:
+            expt_path (str): The path to the experiment directory.
+        """
+        link_restart = os.path.join('archive', 'restart' + self.startfrom_str)
+        restartpath = os.path.realpath(os.path.join(self.base_path, link_restart))  # restart dir from control experiment
+        dest = os.path.join(expt_path, link_restart)  # restart dir symlink for each perturbation experiment
+
+        # only generate symlink if it doesnt exist or force_restart is enabled
+        if not os.path.islink(dest) or self.force_restart or (os.path.islink(dest) and not os.path.exists(os.readlink(dest))):
+            if os.path.exists(dest) or os.path.islink(dest):
+                os.remove(dest)  # remove symlink
+            os.symlink(restartpath, dest)  # generate symlink
+
+    def _update_cpl_dt_params(self, expt_path, param_dict):
+        """
+        Updates coupling timestep parameters.
+
+        Args:
+            expt_path (str): The path to the experiment directory.
+            param_dict (dict): The dictionary of parameters to update.
+        """
+        nuopc_runseq_file = os.path.join(expt_path, "nuopc.runseq")
+        self._update_cpl_dt_nuopc_seq(nuopc_runseq_file, param_dict[next(iter(param_dict.keys()))])
+
+    def _update_nml_params(self, expt_path, param_dict, parameter_block, indx):
+        """
+        Updates namelist parameters and overwrites namelist file.
+
+        Args:
+            expt_path (str): The path to the experiment directory.
+            param_dict (dict): The dictionary of parameters to update.
+            parameter_block (str): The name of the namelist file.
+        """
+
+        cice_path = os.path.join(expt_path, parameter_block)
+        nml_group = self.append_group_list[indx]
+
+        if nml_group.endswith(self.combo_suffix):
+            nml_group = nml_group[:-len(self.combo_suffix)]  # rename the namlist by removing the suffix if the suffix with `_combo`
+
+        patch_dict = {nml_group: {}}
+        for cice_name, cice_value in param_dict.items():
+            if cice_name == 'turning_angle':
+                cosw = np.cos(cice_value * np.pi / 180.)
+                sinw = np.sin(cice_value * np.pi / 180.)
+                patch_dict[nml_group]['cosw'] = cosw
+                patch_dict[nml_group]['sinw'] = sinw
+            else:  # for generic parameters
+                patch_dict[nml_group][cice_name] = cice_value
+
+        f90nml.patch(cice_path, patch_dict, cice_path + '_tmp')
+        os.rename(cice_path + '_tmp', cice_path)
+
+    def _update_mom6_params(self, expt_path, param_dict):
+        """
+        Updates MOM6 parameters in the 'MOM_override' file.
+
+        Args:
+            expt_path (str): The path to the experiment directory.
+            param_dict (dict): The dictionary of parameters to update.
+        """
+        MOM6_or_parser = self._parser_mom6_input(os.path.join(expt_path, "MOM_override"))
+        MOM6_or_parser.param_dict, MOM6_or_parser.commt_dict = update_MOM6_params_override(param_dict,self.commt_dict_change)
+        MOM6_or_parser.writefile_MOM_input(os.path.join(expt_path, "MOM_override"))
+
+    def _generate_expt_directory(self, expt_path, parameter_block, indx):
+        """
+        Generates a new experiment directory by cloning the control experiment.
+        Checks if the tuning parameter matches the control experiment,
+        this validation currently applies only to `nml` files.
+
+        Args:
+            expt_path (str): The path to the experiment directory.
+            param_dict (dict): The dictionary of parameters to update.
+        """
+        if self.check_skipping:
+            if self.tag_model == 'nml':
+                self._check_skipping(self.param_dict_change_list[indx], self.append_group_list[indx], parameter_block, expt_path)
+            elif self.tag_model == 'mom6': # TODO
+                pass
+            elif self.tag_model == 'cpl_dt': # TODO
+                pass
+
+        print(f"Directory {expt_path} not exists, hence cloning template!")
+        command = f"payu clone -B {self.base_branch_name} -b {self.branch_perturb} {self.base_path} {expt_path}"  # automatically leave a commit with expt uuid
+        subprocess.run(command, shell=True, check=True)
+
+    def _generate_expt_names(self, indx):
+        if self.expt_names is None:
+            return "_".join([f"{k}_{v}" for k,v in self.param_dict_change_list[indx].items()])  # if `expt_names` does not exist, expt_name is set as the tunning parameters appending with associated values
+        return self.expt_names[indx]  # user-defined folder names for parameter-tunning experiments
+
+    def _check_skipping(self, param_dict, nml_group, parameter_block, expt_path):
+        """
+        Checks if the tuning parameter matches the control experiment,
+        this validation currently applies only to `nml` files.
+        """
         if self.tag_model == 'nml':
             if nml_group.endswith(self.combo_suffix):  # rename the namlist if suffix with `_combo`
                 nml_group = nml_group[:-len(self.combo_suffix)]
@@ -641,7 +725,7 @@ class Expts_manager(object):
                 sinw = np.sin(param_dict['turning_angle'] * np.pi / 180.)
     
             # load nml of the control experiment
-            self.nml_ctrl = f90nml.read(os.path.join(self.base_path,namelist_name))
+            self.nml_ctrl = f90nml.read(os.path.join(self.base_path,parameter_block))
     
             if all(cn in self.nml_ctrl.get(nml_group,{}) for cn in cice_name):  # cice_name (i.e. tunning parameter) may not be found in the control experiment
                 if 'turning_angle' in param_dict:
@@ -653,16 +737,19 @@ class Expts_manager(object):
             else:
                 print(f"Not all {cice_name} are found in {nml_group}, hence not skipping!")
                 skip = False
-    
+
             if skip:
                 print('-- not creating', expt_path, '- parameters are identical to the control experiment located at', self.base_path,'\n')
                 return
-    
+
         if self.tag_model == 'mom6': # might need MOM_parameter.all, because many parameters are in-default hence not shown up in `MOM_input` 
             #TODO
             pass
 
     def _clean_workspace(self,dir_path):
+        """
+        Cleans `work` directory for failed jobs.
+        """
         work_dir = os.path.join(dir_path,'work')
         if os.path.islink(work_dir) and os.path.isdir(work_dir):  # in case any failed job
             # Payu sweep && setup to ensure the changes correctly && remove the `work` directory
@@ -671,27 +758,24 @@ class Expts_manager(object):
             print(f"Clean up a failed job {work_dir} and prepare it for resubmission.")
 
     def _parser_mom6_input(self, path):
-        """ parse MOM6 input file """
+        """
+        Parses MOM6 input file.
+        """
         mom6parser = self.MOM6InputParser.MOM6InputParser()
         mom6parser.read_input(path)
         mom6parser.parse_lines()
         return mom6parser
 
     def _update_nuopc_config_perturb(self, path):
-        """ Update nuopc.runconfig for the ctrl run """
+        """
+        Updates nuopc.runconfig for perturbation experiment runs.
+        """
         nuopc_input = self.indata.get("perturb_run_config",None)
         if nuopc_input is not None:
             nuopc_file_path = os.path.join(path,"nuopc.runconfig")
             nuopc_runconfig = self.read_nuopc_config(nuopc_file_path)
             self._update_config_entries(nuopc_runconfig,nuopc_input)
             self.write_nuopc_config(nuopc_runconfig, nuopc_file_path)
-
-    def _update_cpl_dt(self,path):
-        """ Update coupling timestep through nuopc.runseq for the ctrl run """
-        cpl_dt_input = self.indata.get("cpl_dt",None)
-        if cpl_dt_input is not None:
-            nuopc_runseq_file = os.path.join(path,"nuopc.runseq")
-            self._update_cpl_dt_nuopc_seq(nuopc_runseq_file,cpl_dt_input)
 
     def _update_config_entries(self,base,change):
         """ recursively update nuopc_runconfig and config.yaml entries """
@@ -784,8 +868,7 @@ class Expts_manager(object):
         if self.run_namelists:
             print("==== Start perturbation experiments ====")
             self.manage_perturb_expt()
-            
-        
+
 if __name__ == "__main__":
     expt_manager = Expts_manager()
     expt_manager.main()
