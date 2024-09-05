@@ -19,15 +19,15 @@ base_url: "git@github.com:ACCESS-NRI/access-om3-configs.git"  # Git URL for the 
 base_commit: 2bc6107 # Commit hash to use
 base_dir_name: Ctrl-1deg_jra55do_ryf  # Directory name for cloning (user-defined)
 base_branch_name: ctrl  # Branch name for the experiment (user-defined)
-test_path: "test"  # Path for all test runs
+test_path: "test-branch-couplertimestep"  # Path for all test runs
 
 # ============ diagnostic table (optional) =======================
 # Configuration for modifying the diagnostic table.
 diag_url: "git@github.com:minghangli-uni/make_diag_table.git"  # Git URL for the `make_diag_table`
 diag_branch_name: "general_scheme1"  # Branch for the `make_diag_table`
 diag_dir_name: "make_diag_table"  # Directory name for the `make_diag_table` (user-defined)
-diag_ctrl: False  # Modify diag_table for control experiment if true
-diag_pert: False  # Modify diag_table for perturbation experiments if true
+diag_ctrl: True  # Modify diag_table for control experiment if true
+diag_pert: True  # Modify diag_table for perturbation experiments if true
 
 # ============ Control Experiment Variables =======================
 # Allows modification of various control experiment settings.
@@ -45,13 +45,13 @@ config.yaml:
     metadata:
         enable: true 
     runlog: true
-cpl_dt: 1800.0  # Coupling timestep in the `nuopc_runseq` 
+cpl_dt:  # Coupling timestep in the `nuopc_runseq` 
 nuopc.runconfig:
     CLOCK_attributes:
         stop_option: nyears
-        stop_n: 5
+        stop_n: 1
         restart_option: nyears
-        restart_n: 5
+        restart_n: 1
     PELAYOUT_attributes:
         atm_ntasks: 24
         cpl_ntasks: 24
@@ -66,15 +66,15 @@ ice_in:
     domain_nml:
         max_blocks: -1
         block_size_x: 15
-        block_size_y: 300
+        block_size_y: 20
 input.nml:
     diag_manager_nml:
         max_axes: 400
         max_files: 200
         max_num_axis_sets: 200
-MOM_input:
-    HFREEZE: 12
-    BOUND_SALINITY: False
+#MOM_input:
+#    HFREEZE: 12
+#    BOUND_SALINITY: False
 
 # ============ Perturbation Experiment Setup (Optional) =======================
 # Configure perturbation experiments, currently supports `nuopc.runconfig` only.
@@ -197,66 +197,66 @@ perturb_run_config:
 # So, some configurations may not run successfully or produce valid results.
 
 namelists:
-    ice_in:
-        shortwave_nml_combo:
-            albicei: [ 0.36, 0.39, 0.47 ]
-            albicev: [ 0.78, 0.81, 0.90 ]
+ #   ice_in:
+ #       shortwave_nml_combo:
+ #           albicei: [ 0.36, 0.39, 0.47 ]
+ #           albicev: [ 0.78, 0.81, 0.90 ]
 
-        ice_in_dir: ['icet1', 'icet2', 'icet3', 'icet4']
-        shortwave_nml:
-            ahmax: [0.2, 0.3]
-            r_snw: [0.1, 0.2]
+ #       ice_in_dir: ['icet1', 'icet2', 'icet3', 'icet4']
+ #       shortwave_nml:
+ #           ahmax: [0.2, 0.3]
+ #           r_snw: [0.1, 0.2]
         
-        ice_in_test: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
-        dynamics_nml_combo:
-            mu_rdg:        [ 2, 3, 4 ]
-            turning_angle: [ 0, 1, 2]
+ #       ice_in_test: ['cice_mu_ta', 'cice_mu_taa', 'cice_ta_mu']
+ #       dynamics_nml_combo:
+ #           mu_rdg:        [ 2, 3, 4 ]
+ #           turning_angle: [ 0, 1, 2]
 
-        thermo_nml:
-            chio: [ 0.001]
+ #       thermo_nml:
+ #           chio: [ 0.001]
 
-    input.nml:
-        diag_manager_nml_combo:
-            max_axes: [450]
-            max_files: [250]
-            max_num_axis_sets: [250]
-    drv_in:
-        debug_inparm_nml:
-            create_esmf_pet_files: ['.true.']
+ #   input.nml:
+ #       diag_manager_nml_combo:
+ #           max_axes: [450]
+ #           max_files: [250]
+ #           max_num_axis_sets: [250]
+ #   drv_in:
+ #       debug_inparm_nml:
+ #           create_esmf_pet_files: ['.true.']
             
-    MOM_input:
-        MOM_input_dir1:             ['lexpt0','lexpt1']
-        MOM_list1_combo:
-            DT_THERM:              [3600.0 ,108000.0]
-            DIABATIC_FIRST:        [True   , False]     
-        MOM_input_dir2: ['expt5']
-        MOM_list2: 
-            THICKNESSDIFFUSE: [False]
+ #   MOM_input:
+ #       MOM_input_dir1:             ['lexpt0','lexpt1']
+ #       MOM_list1_combo:
+ #           DT_THERM:              [3600.0 ,108000.0]
+ #           DIABATIC_FIRST:        [True   , False]     
+ #       MOM_input_dir2: ['expt5']
+ #       MOM_list2: 
+ #           THICKNESSDIFFUSE: [False]
 
-        MOM_list3:
-            HFREEZE: [12,14]
+ #       MOM_list3:
+ #           HFREEZE: [12,14]
 
-        MOM_input_dir10: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
-        MOM_list4:
-            MINIMUM_DEPTH: [0,0.5]
-            MAXIMUM_DEPTH: [6000.0, 7000.0]
+ #       MOM_input_dir10: ['min_depth0', 'min_depth0_5', 'max_depth_6000m', 'max_depth_7000m']
+ #       MOM_list4:
+ #           MINIMUM_DEPTH: [0,0.5]
+ #           MAXIMUM_DEPTH: [6000.0, 7000.0]
 
-        MOM_input_dir25: ['timestep_therm_test']
-        MOM_list5_combo:
-            DT_THERM:              [900.0]
-            DIABATIC_FIRST:        [False]
-            THERMO_SPANS_COUPLING: [True]
+ #       MOM_input_dir25: ['timestep_therm_test']
+ #       MOM_list5_combo:
+ #           DT_THERM:              [900.0]
+ #           DIABATIC_FIRST:        [False]
+ #           THERMO_SPANS_COUPLING: [True]
             
     nuopc.runseq:
         runseq_expt_dir1: ['cpl_dt1', 'cpl_dt2']
         runseq_list1:
-            cpl_dt: [1800.0, 3600.0]
+            cpl_dt: [1800.0, 5400.0]
 
 # ============ Control experiment and perturbation Runs ===================================
 # This section configures the settings for running control experiments and their corresponding perturbation tests.
 # Key parameters include the number of runs, restart options, and directory management for output.
 
-ctrl_nruns: 0
+ctrl_nruns: 2
 # Number of control experiment runs. 
 # Default: 0. 
 # Adjust this value to set the number of iterations for the control experiment, which serves as the baseline for perturbations.
@@ -266,6 +266,13 @@ run_namelists: True
 # Default: False.
 # Set to 'True' to apply configurations from the namelist section; otherwise, 'False' to skip this step.
 
+check_duplicate_jobs: True
+# Checks if there are duplicate PBS jobs within the same parent directory (`test_path`) based on their names.
+# This check is useful when you have existing running jobs and want to add additional tests, which helps avoid conflicts by ensuring new jobs dont duplicate exisiting ones in the same `test_path`.
+# The check will not be triggered if the jobs are located in different `test_path`. It only applies to jobs within the same `test_path` directory.
+# Default: True.
+# If duplicates are found, a message will be printed indicating the presence of duplicate runs and those runs will be skipped.
+ 
 check_skipping: False
 # Checks if certain runs should be skipped based on pre-existing conditions or results. Currently only valids to nml type.
 # Default: False.
@@ -281,7 +288,7 @@ startfrom: 'rest'
 # Options: a specific restart number of the control experiment, or 'rest' to start from the initial state.
 # This parameter determines the initial condition for each perturbation test.
 
-nruns: 0
+nruns: 2
 # Total number of output directories to generate for each Expts_manager member.
 # Default: 0.
 # Specifies how many runs of each perturbation experiment will be started; this number correlates with the different parameter combinations defined in the configuration.
