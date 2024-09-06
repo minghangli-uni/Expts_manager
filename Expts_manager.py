@@ -223,7 +223,9 @@ class Expts_manager(object):
         """
         Setup and run the control experiment
         """
-        self.base_path = os.path.join(self.test_path, self.base_dir_name)
+        self.base_path = os.path.join(
+            self.dir_manager, self.test_path, self.base_dir_name
+        )
         base_path = self.base_path
         ctrl_nruns = self.ctrl_nruns
 
@@ -267,7 +269,7 @@ class Expts_manager(object):
 
         # check duplicated running jobs
         if self.check_duplicate_jobs:
-            duplicated_bool = self._check_duplicated_jobs(pbs_jobs, self.base_dir_name)
+            duplicated_bool = self._check_duplicated_jobs(pbs_jobs, base_path)
         else:
             duplicated_bool = False
 
@@ -672,7 +674,7 @@ class Expts_manager(object):
 
             # check duplicated running jobs
             if self.check_duplicate_jobs:
-                duplicated_bool = self._check_duplicated_jobs(pbs_jobs, expt_name)
+                duplicated_bool = self._check_duplicated_jobs(pbs_jobs, expt_path)
             else:
                 duplicated_bool = False
 
@@ -902,35 +904,36 @@ class Expts_manager(object):
                 current_value = value.strip()
         return pbs_jobs
 
-    def _check_duplicated_jobs(self, pbs_jobs, expt_name):
+    def _check_duplicated_jobs(self, pbs_jobs, expt_path):
 
         def extract_current_and_parent_folder(tmp_path):
+
             # extract base_name or expt_name from pbs jobs
-            current_folder = tmp_path.split("/")[-2]
+            folder_path = "/" + "/".join(tmp_path.split("/")[1:-1])
 
             # extract test_path from pbs jobs
-            parent_folder = tmp_path.split("/")[-3]
+            parent_path = "/" + "/".join(tmp_path.split("/")[1:-2])
 
-            return current_folder, parent_folder
+            return folder_path, parent_path
 
-        parent_folders = {}
+        parent_paths = {}
         for job_id, job_info in pbs_jobs.items():
-            current_folder, parent_folder = extract_current_and_parent_folder(
+            folder_path, parent_path = extract_current_and_parent_folder(
                 job_info["Error_Path"]
             )
-            if parent_folder not in parent_folders:
-                parent_folders[parent_folder] = set()
-            parent_folders[parent_folder].add(current_folder)
+            if parent_path not in parent_paths:
+                parent_paths[parent_path] = []
+            parent_paths[parent_path].append(folder_path)
 
         duplicated = False
-        for parent_folder, folders in parent_folders.items():
-            if expt_name in folders:
-                if len(folders) > 1:
-                    print(
-                        f"You have duplicated runs for folder '{expt_name}' in the same folder '{parent_folder}', "
-                        f"hence not submitting this job!\n"
-                    )
-                    duplicated = True
+
+        for parent_path, folder_paths in parent_paths.items():
+            if expt_path in folder_paths:
+                print(
+                    f"You have duplicated runs for folder '{os.path.basename(expt_path)}' in the same folder '{parent_path}', "
+                    f"hence not submitting this job!\n"
+                )
+                duplicated = True
         return duplicated
 
     def _start_experiment_runs(self, expt_path, expt_name, duplicated, num_runs):
