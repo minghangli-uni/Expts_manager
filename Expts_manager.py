@@ -242,11 +242,6 @@ class Expts_manager(object):
                 if self.diag_ctrl and self.diag_path:
                     self._copy_diag_table(base_path)
 
-                # setup the control experiments
-                self._setup_ctrl_expt()
-
-                # Checks the current state of the repo, commits relevant changes.
-                self._check_and_commit_changes()
         else:
             # clone the template repo and setup the control branch
             self._clone_template_repo()
@@ -258,11 +253,11 @@ class Expts_manager(object):
             if self.diag_ctrl and self.diag_path:
                 self._copy_diag_table(base_path)
 
-            # setup the control experiments
-            self._setup_ctrl_expt()
+        # setup the control experiments
+        self._setup_ctrl_expt()
 
-            # Checks the current state of the repo, commits relevant changes.
-            self._check_and_commit_changes()
+        # Checks the current state of the repo, commits relevant changes.
+        self._check_and_commit_changes()
 
         # check exisiting pbs jobs
         pbs_jobs = self._output_existing_pbs_jobs()
@@ -317,14 +312,6 @@ class Expts_manager(object):
         return len(os.listdir(self.base_path))
 
     def _setup_ctrl_expt(self):
-        # Update configuration files, namelist and MOM_input for the control experiment if needed.
-        self._update_contrl_params()
-
-        # Payu setup && sweep to ensure the changes correctly && remove the `work` directory for the control run
-        command = f"cd {self.base_path} && payu setup && payu sweep"
-        subprocess.run(command, shell=True, check=False)
-
-    def _update_contrl_params(self):
         """
         Modifies parameters based on the input YAML configuration for the ctrl experiment.
 
@@ -400,6 +387,31 @@ class Expts_manager(object):
                     self._update_cpl_dt_nuopc_seq(nuopc_runseq_file, yaml_data)
 
     def _check_and_commit_changes(self):
+        """
+        Checks the current state of the repo, stages relevant changes, and commits them.
+        If no changes are detected, it provides a message indicating that no commit was made.
+        """
+        repo = git.Repo(self.base_path)
+        print(f"Current base branch is: {repo.active_branch.name}")
+        deleted_files = self._get_deleted_files(repo)
+        # remove deleted files or `work` directory
+        if deleted_files:
+            repo.index.remove(deleted_files, r=True)
+        untracked_files = self._get_untracked_files(repo)
+        changed_files = self._get_changed_files(repo)
+        staged_files = set(untracked_files + changed_files)
+        # restore *.swp files in case users open any files during case is are running
+        self._restore_swp_files(repo, staged_files)
+        commit_message = f"Control experiment setup: Configure `{self.base_branch_name}` branch by `{self.yamlfile}`\n committed files/directories {staged_files}!"
+        if staged_files:
+            repo.index.add(staged_files)
+            repo.index.commit(commit_message)
+        else:
+            print(
+                f"Nothing changed, hence no further commits to the {self.base_path} repo!"
+            )
+
+    def _check_and_commit_changes2(self):
         """
         Checks the current state of the repo, stages relevant changes, and commits them.
         If no changes are detected, it provides a message indicating that no commit was made.
@@ -657,17 +669,13 @@ class Expts_manager(object):
                 self._copy_diag_table(expt_path)
 
             # symlink restart directories
-            if self.startfrom_str != "rest":
-                self._generate_restart_symlink(expt_path)
+            restartpath = self._generate_restart_symlink(expt_path)
 
             # optionally update nuopc.runconfig for perturbation runs
             self._update_nuopc_config_perturb(expt_path)
 
             self._update_config_yaml_perturb(expt_path, expt_name)
-            self._update_metadata_yaml_perturb(expt_path, param_dict)
-
-            # clean `work` directory for failed jobs
-            self._clean_workspace(expt_path)
+            self._update_metadata_yaml_perturb(expt_path, param_dict, restartpath)
 
             # check exisiting pbs jobs
             pbs_jobs = self._output_existing_pbs_jobs()
@@ -803,6 +811,7 @@ class Expts_manager(object):
             if os.path.exists(dest) or os.path.islink(dest):
                 os.remove(dest)  # remove symlink
             os.symlink(restartpath, dest)  # generate symlink
+        return restartpath
 
     def _update_nuopc_config_perturb(self, path):
         """
@@ -828,7 +837,7 @@ class Expts_manager(object):
         config_data["jobname"] = expt_name
         self._write_ryaml(config_data, config_path)
 
-    def _update_metadata_yaml_perturb(self, expt_path, param_dict):
+    def _update_metadata_yaml_perturb(self, expt_path, param_dict, restartpath):
         """
         Updates the `metadata.yaml` file with relevant metadata.
 
@@ -838,8 +847,6 @@ class Expts_manager(object):
         """
         metadata_path = os.path.join(expt_path, "metadata.yaml")
         metadata = self._read_ryaml(metadata_path)  # load metadata of each perturbation
-        if self.startfrom_str == "rest":
-            restartpath = "rest"
         self._update_metadata_description(metadata, restartpath)  # update `description`
         self._remove_metadata_comments(
             "description", metadata
@@ -930,7 +937,7 @@ class Expts_manager(object):
         for parent_path, folder_paths in parent_paths.items():
             if expt_path in folder_paths:
                 print(
-                    f"You have duplicated runs for folder '{os.path.basename(expt_path)}' in the same folder '{parent_path}', "
+                    f"-- You have duplicated runs for folder '{os.path.basename(expt_path)}' in the same folder '{parent_path}', "
                     f"hence not submitting this job!\n"
                 )
                 duplicated = True
@@ -957,10 +964,14 @@ class Expts_manager(object):
                 print("\n")
             else:
                 print(
-                    f"-- `{expt_name}` has already completed {doneruns} runs! Hence, stopping further runs.\n"
+                    f"-- {expt_name} has already completed {doneruns} runs! Hence, stopping further runs.\n"
                 )
 
         if not duplicated:
+
+            # clean `work` directory for failed jobs
+            self._clean_workspace(expt_path)
+
             if num_runs > 0:
                 runs()
             else:
